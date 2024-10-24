@@ -10,6 +10,6 @@ config = Config()
 
 azure_openai = AzureChatOpenAI(
     openai_api_version=config.AZURE_CHAT_MODEL_OPENAI_VERSION,
-    azure_deployment=config.AZURE_EMBEDDING_MODEL_DEPLOYMENT_NAME,
+    azure_deployment=config.AZURE_CHAT_MODEL_DEPLOYMENT_NAME,
     temperature=0
 )
