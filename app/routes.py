@@ -4,28 +4,28 @@ from app.chatbot import generate_response
 chatbot_blueprint = Blueprint('chatbot', __name__)
 
 @chatbot_blueprint.route('/buv', methods=['POST'])
-def chat():
+def buv_chat():
     data = request.json
     user_input = data.get('message')
     session_id = data.get('session_id')
-    uni_name = data.get('uni_name')
     print(f"{user_input = }")
 
     if not user_input:
         return jsonify({"error": "No message provided"}), 400
 
-    response = generate_response(user_input, session_id)
+    response = generate_response(user_input, session_id, "British University Vietnam")
     return jsonify({"response": response})
 
 
-# @chatbot_blueprint.route('/su', methods=['POST'])
-# def chat():
-#     data = request.json
-#     user_input = data.get('message')
+@chatbot_blueprint.route('/su', methods=['POST'])
+def su_chat():
+    data = request.json
+    user_input = data.get('message')
+    session_id = data.get('session_id')
+    print(f"{user_input = }")
 
-#     if not user_input:
-#         return jsonify({"error": "No message provided"}), 400
+    if not user_input:
+        return jsonify({"error": "No message provided"}), 400
 
-#     # Generate a chatbot response
-#     response = generate_response(user_input)
-#     return jsonify({"response": response})
+    response = generate_response(user_input, session_id, "Staffordshire University")
+    return jsonify({"response": response})
