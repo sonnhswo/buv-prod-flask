@@ -1,8 +1,7 @@
 import pprint
 
 from app.models.chat_models import azure_openai
-from app.models.embeddings import text_embedding_3large
-from app.database import get_retriever
+from app.database import initialize_retriever
 
 from langchain.prompts.chat import ChatPromptTemplate, MessagesPlaceholder
 from langchain.chains.history_aware_retriever import create_history_aware_retriever
@@ -15,9 +14,9 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_openai import AzureChatOpenAI
 
 
-def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
-    retriever = get_retriever(uni_name)
-    
+retriever = initialize_retriever("British University Vietnam")
+
+def generate_response(user_input: str, session_id: str) -> str:
     # create contextualized prompt
     contextualized_system_prompt = (
         "Given a chat history and the latest user question "
@@ -126,6 +125,7 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
     )
     
     def conversational_chain(query: str, session_id: str) -> dict:
+        print(f"{query=}")
         answer = conversational_rag_chain.invoke(
             {"input": query},
             config={
