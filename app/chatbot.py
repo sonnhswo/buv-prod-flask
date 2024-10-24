@@ -1,8 +1,7 @@
 import pprint
 
 from app.models.chat_models import azure_openai
-from app.database import initialize_retriever
-
+from app.database import initialize_retrievers
 from langchain.prompts.chat import ChatPromptTemplate, MessagesPlaceholder
 from langchain.chains.history_aware_retriever import create_history_aware_retriever
 from langchain.chains.retrieval import create_retrieval_chain
@@ -14,9 +13,21 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_openai import AzureChatOpenAI
 
 
-retriever = initialize_retriever("British University Vietnam")
+retrievers = initialize_retrievers()
+# Managing chat history
+store = {}
+def get_session_history(session_id: str) -> BaseChatMessageHistory:
+    if session_id not in store:
+        store[session_id] = ChatMessageHistory()
 
-def generate_response(user_input: str, session_id: str) -> str:
+    return store[session_id]
+
+def trim_message_history(session_id: str):
+    if session_id in store:
+        store[session_id].messages = store[session_id].messages[-10:] if len(store[session_id].messages) > 10 else store[session_id].messages
+
+
+def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
     # create contextualized prompt
     contextualized_system_prompt = (
         "Given a chat history and the latest user question "
@@ -35,6 +46,7 @@ def generate_response(user_input: str, session_id: str) -> str:
     )
     
     # create history aware retriever
+    retriever = retrievers[uni_name]
     history_aware_retriever = create_history_aware_retriever(azure_openai, retriever, contextualized_template)
     
     # Create system prompt
@@ -108,13 +120,6 @@ def generate_response(user_input: str, session_id: str) -> str:
     question_answer_chain = create_stuff_documents_chain(azure_openai, system_template)
     rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain) #runnable
     
-    # Managing chat history
-    store = {}
-    def get_session_history(session_id: str) -> BaseChatMessageHistory:
-        if session_id not in store:
-            store[session_id] = ChatMessageHistory()
-
-        return store[session_id]
     
     conversational_rag_chain = RunnableWithMessageHistory(
         rag_chain, 
@@ -126,16 +131,20 @@ def generate_response(user_input: str, session_id: str) -> str:
     
     def conversational_chain(query: str, session_id: str) -> dict:
         print(f"{query=}")
+        print(f"{session_id=}")
         answer = conversational_rag_chain.invoke(
             {"input": query},
             config={
                 "configurable": {"session_id": session_id}
             }
         )
+        
         pprint.pprint(answer)
         return answer
     
-    
+    print(f"Before trimming {store=}")
+    trim_message_history(session_id)
     response = conversational_chain(user_input, session_id)
+    print(f"After trimming {store=}")
 
     return response['answer']
