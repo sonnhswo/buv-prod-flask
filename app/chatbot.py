@@ -36,6 +36,9 @@ def trim_message_history(session_id: str):
     if session_id in store:
         store[session_id].messages = store[session_id].messages[-10:] if len(store[session_id].messages) > 10 else store[session_id].messages
 
+def clear_history(session_id: str):
+    if session_id in store:
+        del store[session_id]
 
 # Create an engine that connects to the PostgreSQL database
 engine = create_engine(f"postgresql+psycopg://{config.PG_VECTOR_USER}:{config.PG_VECTOR_PASSWORD}@{config.PG_VECTOR_HOST}:{config.PGPORT}/{config.PGDATABASE5}")
