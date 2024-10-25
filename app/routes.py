@@ -13,7 +13,7 @@ def buv_chat():
     if not user_input:
         return jsonify({"error": "No message provided"}), 400
 
-    response = generate_response(user_input, session_id, "British University Vietnam")
+    response = generate_response(user_input, str(session_id), "British University Vietnam")
     return jsonify({"response": response})
 
 
@@ -27,5 +27,5 @@ def su_chat():
     if not user_input:
         return jsonify({"error": "No message provided"}), 400
 
-    response = generate_response(user_input, session_id, "Staffordshire University")
+    response = generate_response(user_input, str(session_id), "Staffordshire University")
     return jsonify({"response": response})
