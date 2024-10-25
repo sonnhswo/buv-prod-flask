@@ -3,7 +3,6 @@ from flask_sqlalchemy import SQLAlchemy
 
 from typing import Dict
 
-# from langchain.vectorstores.pgvector import PGVector
 from langchain_postgres.vectorstores import PGVector
 from langchain.retrievers import MultiVectorRetriever
 from langchain.retrievers.multi_vector import SearchType
@@ -14,13 +13,6 @@ from app.custom_docstore import PostgresStore
 
 config = Config()
 
-
-# db = SQLAlchemy()
-
-# def init_db(app: Flask):
-#     db.init_app(app)
-#     with app.app_context():
-#         db.create_all()
 
 uni_dbs = {
     "British University Vietnam": f"postgresql+psycopg://{config.PG_VECTOR_USER}:{config.PG_VECTOR_PASSWORD}@{config.PG_VECTOR_HOST}:{config.PGPORT}/{config.PGDATABASE}", 

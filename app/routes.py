@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify
 from app.chatbot import generate_response
 
 chatbot_blueprint = Blueprint('chatbot', __name__)

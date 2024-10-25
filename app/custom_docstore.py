@@ -14,8 +14,6 @@ from langchain_core.stores import BaseStore
 from sqlalchemy.orm import sessionmaker, scoped_session
 
 
-
-
 # Custom Postgres docstore
 class DocumentModel(BaseModel):
     key: Optional[str] = Field(None)
