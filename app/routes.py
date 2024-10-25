@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 
+from app.chatbot import clear_history
 from app.chatbot import generate_response
 from app.utils import FAQ
 from config import Config
@@ -18,6 +19,14 @@ session = Session()
 
 
 chatbot_blueprint = Blueprint('chatbot', __name__)
+
+@chatbot_blueprint.route('/clear_conversation', methods=['POST'])
+def clear_conversation():
+    data: dict = request.json
+    session_id: str = data.get('session_id')
+    clear_history(session_id)
+    return jsonify({"response": "Conversation cleared!"})
+
 
 @chatbot_blueprint.route('/buv', methods=['POST'])
 def buv_chat():
