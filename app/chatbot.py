@@ -20,6 +20,10 @@ from sqlalchemy.orm import sessionmaker
 
 from openai import BadRequestError
 
+from typing import Optional, Literal
+from pydantic import BaseModel, Field
+
+
 config = Config()
 
 retrievers = initialize_retrievers()
@@ -47,6 +51,10 @@ Session = sessionmaker(bind=engine)
 # Create a session
 session = Session()
 
+class FormatedOutput(BaseModel):
+    answer: str = Field(description="The answer to the user question")
+    source: Literal["BUV Frequently Asked Questions", "SU Frequently Asked Questions", "Student Handbooks", "PSG Programme Handbook", None] = Field(description="Source document of the information retrieved") #type: ignore
+    page_number: Optional[str] = Field(description="The page number in the document where the information was retrieved")
 
 def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
     try:
@@ -140,8 +148,8 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
                         run_name="format_inputs"
                     )
                     | prompt
-                    | llm
-                    | output_parser
+                    | llm.with_structured_output(FormatedOutput)
+                    # | output_parser
                     ).with_config(run_name="stuff_documents_chain")
             
             # create question answer chain rag chain
@@ -160,22 +168,29 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
             def conversational_chain(query: str, session_id: str) -> dict:
                 print(f"{query=}")
                 print(f"{session_id=}")
-                answer = conversational_rag_chain.invoke(
+                response = conversational_rag_chain.invoke(
                     {"input": query},
                     config={
                         "configurable": {"session_id": session_id}
                     }
                 )
                 
-                pprint.pprint(answer)
-                return answer
+                pprint.pprint(response)
+                return response
             
             print(f"Before trimming {store=}")
             trim_message_history(session_id)
             response = conversational_chain(user_input, session_id)
+            print(f"{response=}")
             print(f"After trimming {store=}")
             
-            answer = response["answer"]
+            output = response['answer']
+            answer = output.answer
+            source = output.source
+            page_number = output.page_number
+            print(f"{answer=}")
+            print(f"{source=}")
+            print(f"{page_number=}")
 
         # Save user_input and answer to question_answer table in the raw_data_users_20240826 database
         # Create a new FAQ instance
@@ -185,7 +200,11 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
         # Commit the session to insert the data into the table
         session.commit()
         
-        return answer
+        return {
+            "answer": answer,
+            "source": source,
+            "page_number": page_number,
+        }
     except (BadRequestError, ValueError):
         standard_message = ("For further assistance, please contact our Student Information Office via email at studentservice@buv.edu.vn or by phone at 0936 376 136.")
         # Create a new FAQ instance

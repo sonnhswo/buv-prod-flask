@@ -56,7 +56,7 @@ def buv_chat():
     if ask_relevant_question:
         response = generate_response(user_input, str(session_id), "British University Vietnam")
         
-    return jsonify({"response": response})
+    return jsonify(response)
 
 
 @chatbot_blueprint.route('/su', methods=['POST'])
@@ -87,4 +87,4 @@ def su_chat():
     if ask_relevant_question:
         response = generate_response(user_input, str(session_id), "Staffordshire University")
         
-    return jsonify({"response": response})
+    return jsonify(response)
