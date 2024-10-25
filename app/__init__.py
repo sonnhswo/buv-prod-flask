@@ -9,7 +9,7 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
     
-    CORS(app)
+    CORS(app) # Allow connections from all origins
     
     # Register the API blueprint
     app.register_blueprint(chatbot_blueprint)
