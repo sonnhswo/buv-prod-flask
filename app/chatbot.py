@@ -1,4 +1,5 @@
 import pprint
+import numpy as np
 
 from app.models.chat_models import azure_openai
 from app.database import initialize_retrievers
@@ -51,9 +52,10 @@ Session = sessionmaker(bind=engine)
 # Create a session
 session = Session()
 
+doc_options = ["BUV Frequently Asked Questions", "SU Frequently Asked Questions", "Student Handbooks", "PSG Programme Handbook"]
 class FormatedOutput(BaseModel):
     answer: str = Field(description="The answer to the user question")
-    source: Literal["BUV Frequently Asked Questions", "SU Frequently Asked Questions", "Student Handbooks", "PSG Programme Handbook", None] = Field(description="Source document of the information retrieved") #type: ignore
+    source: Optional[Literal[*np.array(doc_options)]] = Field(description=f"Source document of the information retrieved, should be one of these options: {doc_options}") #type:ignore
     page_number: Optional[str] = Field(description="The page number in the document where the information was retrieved")
 
 def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
