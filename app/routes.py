@@ -42,10 +42,15 @@ def buv_chat():
     keywords = ["Stirling", "University of London", "UoL", "IFP", "Foundation", "Arts University Bournemouth", "Bournemouth", "AUB", "Staffordshire", "SU"]
     for keyword in keywords:
         if keyword in user_input:
-            response = "Thank you for your question. Unfortunately, I can only provide answers related to British University Vietnam. Please reach out to our Student Information Office at studentservice@buv.edu.vn for further assistance."
+            answer = "Thank you for your question. Unfortunately, I can only provide answers related to British University Vietnam. Please reach out to our Student Information Office at studentservice@buv.edu.vn for further assistance."
+            response = {
+                "answer": answer,
+                "source": None,
+                "page_number": None
+            }
             ask_relevant_question = False
             # Create a new FAQ instance
-            new_faq = FAQ(question=user_input, answer=response, bot_type="British University Vietnam")
+            new_faq = FAQ(question=user_input, answer=answer, bot_type="British University Vietnam")
             # Add the new instance to the session
             session.add(new_faq)
             # Commit the session to insert the data into the table
@@ -73,10 +78,15 @@ def su_chat():
     keywords = ["Stirling", "University of London", "UoL", "IFP", "Foundation", "Arts University Bournemouth", "Bournemouth", "AUB", "Staffordshire"]
     for keyword in keywords:
         if keyword in user_input:
-            response = "Thank you for your question. Unfortunately, I can only provide answers related to Staffordshire University. Please reach out to our Student Information Office at studentservice@buv.edu.vn for further assistance."
+            answer = "Thank you for your question. Unfortunately, I can only provide answers related to Staffordshire University. Please reach out to our Student Information Office at studentservice@buv.edu.vn for further assistance."
+            response = {
+                "answer": answer,
+                "source": None,
+                "page_number": None
+            }
             ask_relevant_question = False
             # Create a new FAQ instance
-            new_faq = FAQ(question=user_input, answer=response, bot_type="Staffordshire University")
+            new_faq = FAQ(question=user_input, answer=answer, bot_type="Staffordshire University")
             # Add the new instance to the session
             session.add(new_faq)
             # Commit the session to insert the data into the table
