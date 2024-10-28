@@ -52,7 +52,7 @@ Session = sessionmaker(bind=engine)
 # Create a session
 session = Session()
 
-doc_options = ["BUV Frequently Asked Questions", "SU Frequently Asked Questions", "Student Handbooks", "PSG Programme Handbook"]
+doc_options = ["BUV Frequently Asked Questions", "SU Frequently Asked Questions", "Student Handbook", "PSG Programme Handbook"]
 class FormatedOutput(BaseModel):
     answer: str = Field(description="The answer to the user question")
     source: Optional[Literal[*np.array(doc_options)]] = Field(description=f"Source document of the information retrieved, should be one of these options: {doc_options}") #type:ignore
