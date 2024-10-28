@@ -64,6 +64,8 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
         print(f"{language_detection=}")
         if language_detection.strip().lower() == "vietnamese":
             answer = "We're sorry for any inconvenience; however, our chatbot can only answer questions in English. Unfortunately, Vietnamese isn't available at the moment. Thank you for your understanding!"
+            source = None
+            page_number = None
         else:
             
             # create contextualized prompt
