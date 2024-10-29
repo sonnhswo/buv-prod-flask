@@ -1,3 +1,4 @@
+import re
 import pprint
 import numpy as np
 
@@ -58,6 +59,13 @@ class FormatedOutput(BaseModel):
     # source: Optional[Literal[*np.array(doc_options)]] = Field(description=f"Source document of the information retrieved, should be one of these options: {doc_options}") #type:ignore
     source: Optional[Literal["BUV Frequently Asked Questions", "SU Frequently Asked Questions", "Student Handbook", "PSG Programme Handbook"]] = Field(default=None, description=f"Source document of the information retrieved, should be one of these options: {doc_options}") #type:ignore
     page_number: Optional[str] = Field(default=None, description="The page number in the document where the information was retrieved")
+
+def stringify_formatted_answer(inputs: FormatedOutput) -> str:
+    return f"""
+    Answer: {inputs.answer}\n\n
+    Source: {inputs.source}\n\n
+    Pages: {inputs.page_number}\n\n
+    """
 
 def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
     try:
@@ -154,7 +162,7 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
                     )
                     | prompt
                     | llm.with_structured_output(FormatedOutput)
-                    # | output_parser
+                    | stringify_formatted_answer
                     ).with_config(run_name="stuff_documents_chain")
             
             # create question answer chain rag chain
@@ -190,9 +198,10 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
             print(f"After trimming {store=}")
             
             output = response['answer']
-            answer = output.answer
-            source = output.source
-            page_number = output.page_number
+            matches = re.search(r"Answer:\s*(.*?)\n\n\s*Source:\s*(.*?)\n\n\s*Pages:\s*(\d+)", output, re.DOTALL)
+            answer = matches.group(1).strip()
+            source = matches.group(2).strip()
+            page_number = matches.group(3).strip()
             print(f"{answer=}")
             print(f"{source=}")
             print(f"{page_number=}")
