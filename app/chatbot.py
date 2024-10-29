@@ -198,10 +198,16 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
             print(f"After trimming {store=}")
             
             output = response['answer']
-            matches = re.search(r"Answer:\s*(.*?)\n\n\s*Source:\s*(.*?)\n\n\s*Pages:\s*(\d+)", output, re.DOTALL)
+            matches = re.search(r"Answer:\s*(.*?)\n\n\n\s*Source:\s*(.*?)\n\n\n\s*Pages:\s*(.*?)\n\n\n", output, re.DOTALL)
             answer = matches.group(1).strip()
             source = matches.group(2).strip()
             page_number = matches.group(3).strip()
+            blank_values = ["None", ""]
+            if source in blank_values:
+                source = None
+            if page_number in blank_values:
+                page_number = None
+
             print(f"{answer=}")
             print(f"{source=}")
             print(f"{page_number=}")
