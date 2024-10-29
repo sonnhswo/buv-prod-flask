@@ -211,12 +211,20 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
             "page_number": page_number,
         }
     except (BadRequestError, ValueError):
-        standard_message = ("For further assistance, please contact our Student Information Office via email at studentservice@buv.edu.vn or by phone at 0936 376 136.")
+        standard_message = "For further assistance, please contact our Student Information Office via email at studentservice@buv.edu.vn or by phone at 0936 376 136."
+        
         # Create a new FAQ instance
         new_faq = FAQ(question=user_input, answer=standard_message, bot_type=uni_name)
         # Add the new instance to the session
         session.add(new_faq)
         # Commit the session to insert the data into the table
         session.commit()
+        
+        return {
+            "answer": standard_message,
+            "source": None,
+            "page_number": None,
+        }
+        
     finally:
         session.close()
