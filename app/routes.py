@@ -75,7 +75,7 @@ def su_chat():
         return jsonify({"error": "No message provided"}), 400
 
     ask_relevant_question = True
-    keywords = ["Stirling", "University of London", "UoL", "IFP", "Foundation", "Arts University Bournemouth", "Bournemouth", "AUB", "Staffordshire"]
+    keywords = ["Stirling", "University of London", "UoL", "IFP", "Foundation", "Arts University Bournemouth", "Bournemouth", "AUB"]
     for keyword in keywords:
         if keyword in user_input:
             answer = "Thank you for your question. Unfortunately, I can only provide answers related to Staffordshire University. Please reach out to our Student Information Office at studentservice@buv.edu.vn for further assistance."
