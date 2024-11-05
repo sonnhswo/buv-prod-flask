@@ -223,13 +223,13 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
         
         if uni_name == "British University Vietnam":
             return {
-                "answer": "For BUV students:\n" + answer,
+                "answer": "*For BUV students:*\n\n" + answer,
                 "source": source,
                 "page_number": page_number,
             }
         elif uni_name == "Staffordshire University":
             return {
-                "answer": "For SU students:\n" + answer,
+                "answer": "*For SU students:*\n\n" + answer,
                 "source": source,
                 "page_number": page_number,
             }
@@ -251,13 +251,13 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
         
         if uni_name == "British University Vietnam":
             return {
-                "answer": "For BUV students:\n" + standard_message,
+                "answer": "*For BUV students:*\n\n" + standard_message,
                 "source": None,
                 "page_number": None,
             }
         elif uni_name == "Staffordshire University":
             return {
-                "answer": "For SU students:\n" + standard_message,
+                "answer": "*For SU students:*\n\n" + standard_message,
                 "source": None,
                 "page_number": None,
             }
