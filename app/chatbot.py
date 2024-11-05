@@ -221,11 +221,24 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
         # Commit the session to insert the data into the table
         session.commit()
         
-        return {
-            "answer": answer,
-            "source": source,
-            "page_number": page_number,
-        }
+        if uni_name == "British University Vietnam":
+            return {
+                "answer": "For BUV students:\n" + answer,
+                "source": source,
+                "page_number": page_number,
+            }
+        elif uni_name == "Staffordshire University":
+            return {
+                "answer": "For SU students:\n" + answer,
+                "source": source,
+                "page_number": page_number,
+            }
+        else:
+            return {
+                "answer": answer,
+                "source": source,
+                "page_number": page_number,
+            }
     except (BadRequestError, ValueError):
         standard_message = "For further assistance, please contact our Student Information Office via email at studentservice@buv.edu.vn or by phone at 0936 376 136."
         
@@ -236,11 +249,24 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
         # Commit the session to insert the data into the table
         session.commit()
         
-        return {
-            "answer": standard_message,
-            "source": None,
-            "page_number": None,
-        }
+        if uni_name == "British University Vietnam":
+            return {
+                "answer": "For BUV students:\n" + standard_message,
+                "source": None,
+                "page_number": None,
+            }
+        elif uni_name == "Staffordshire University":
+            return {
+                "answer": "For SU students:\n" + standard_message,
+                "source": None,
+                "page_number": None,
+            }
+        else:
+            return {
+                "answer": standard_message,
+                "source": None,
+                "page_number": None,
+            }
         
     finally:
         session.close()
