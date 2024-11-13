@@ -48,6 +48,7 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
             answer = "We're sorry for any inconvenience; however, our chatbot can only answer questions in English. Unfortunately, Vietnamese isn't available at the moment. Thank you for your understanding!"
             source = None
             page_number = None
+            relevant_questions = []
         else:
             # create history aware retriever
             retriever = retrievers[uni_name]
@@ -62,6 +63,7 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
             answer = output.get("answer")
             source = output.get("source")
             page_number = output.get("page_number")
+            relevant_questions = output.get("relevant_questions")
 
         # Save user_input and answer to question_answer table in the raw_data_users_20240826 database
         # Create a new FAQ instance
@@ -75,9 +77,11 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
             "answer": add_prefix_to_answer(answer, uni_name),
             "source": source,
             "page_number": page_number,
+            "relevant_questions": relevant_questions
         }
     
-    except (BadRequestError, ValueError):
+    except (BadRequestError, ValueError) as e:
+        print(e)
         standard_message = "For further assistance, please contact our Student Information Office via email at studentservice@buv.edu.vn or by phone at 0936 376 136."
         
         # Create a new FAQ instance
@@ -91,7 +95,9 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
             "answer": add_prefix_to_answer(standard_message, uni_name),
             "source": None,
             "page_number": None,
+            "relevant_questions": []
         }
-        
+    except Exception as e:
+        print(e)
     finally:
         session.close()
