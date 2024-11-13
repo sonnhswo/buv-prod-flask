@@ -1,12 +1,12 @@
 from flask import Blueprint, request, jsonify
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 from app.chatbot import clear_history
 from app.chatbot import generate_response
 from app.utils import FAQ
 from config import Config
-
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from .database import uni_dbs
 
 config = Config()
 
@@ -19,6 +19,7 @@ session = Session()
 
 
 chatbot_blueprint = Blueprint('chatbot', __name__)
+question_suggest_blueprint = Blueprint('question_suggest', __name__)
 
 @chatbot_blueprint.route('/clear_conversation', methods=['POST'])
 def clear_conversation():
@@ -98,3 +99,23 @@ def su_chat():
         response = generate_response(user_input, str(session_id), "Staffordshire University")
         
     return jsonify(response)
+
+@question_suggest_blueprint.route('/start', methods=['GET'])
+def start_questions():
+    onwarding_body = request.args.get("onwarding_body")
+    if onwarding_body == "buv":
+        connection_string = uni_dbs['British University Vietnam']
+    elif onwarding_body == "su":
+        connection_string = uni_dbs['Staffordshire University']
+
+    engine = create_engine(connection_string)
+    connection = engine.connect()
+    cursor = connection.connection.cursor()
+    query = """SELECT document FROM langchain_pg_embedding
+                ORDER BY RANDOM()
+                LIMIT 10;"""
+    cursor.execute(query)
+    results = cursor.fetchall()
+    cursor.close()
+    results = [item[0].strip() for item in results]
+    return jsonify({'data': results})
