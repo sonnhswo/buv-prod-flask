@@ -92,3 +92,6 @@ def add_prefix_to_answer(answer, uni_name):
         return "**For SU students:**\n\n" + answer
             
     return answer
+
+class RelevantQuestionsOutput(BaseModel):
+    questions: list[str] = Field(default=[], description="Relevant questions that the user may have regarding their conversation with the bot.")

@@ -118,4 +118,4 @@ def start_questions():
     results = cursor.fetchall()
     cursor.close()
     results = [item[0].strip() for item in results]
-    return jsonify({'data': results})
+    return jsonify({'relevant_questions': results})
