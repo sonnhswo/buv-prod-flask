@@ -172,6 +172,9 @@ debug.ipynb
 
 test.py
 
+test/
+data/
+
 .env_
 
 .env
