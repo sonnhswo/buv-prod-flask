@@ -2,7 +2,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 import pprint
 
-from app.models.chat_models import azure_openai
+from app.llm_models.chat_models import azure_openai
 
 from langchain.prompts.chat import ChatPromptTemplate
 from langchain.chains.history_aware_retriever import create_history_aware_retriever

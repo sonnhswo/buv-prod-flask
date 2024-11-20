@@ -4,6 +4,7 @@ from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv(".env"), override=True)
 
 class Config:
+    
     AZURE_OPENAI_API_KEY = os.getenv('AZURE_OPENAI_API_KEY')
     print(f"{AZURE_OPENAI_API_KEY = }")
     AZURE_OPENAI_ENDPOINT = os.getenv('AZURE_OPENAI_ENDPOINT')
@@ -44,3 +45,5 @@ class Config:
     print(f"{BUS_SCHEDULE_FILE = }")
     STARTING_TIME_FILE = os.getenv('STARTING_TIME_FILE') # Handle Bus Schedule cases
     print(f"{STARTING_TIME_FILE = }")
+
+    SQLALCHEMY_DATABASE_URI = f'postgresql://{PG_VECTOR_USER}:{PG_VECTOR_PASSWORD}@{PG_VECTOR_HOST}/{PGDATABASE5}'
