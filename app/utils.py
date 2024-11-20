@@ -7,7 +7,7 @@ from sqlalchemy import Column, Integer, Text
 from sqlalchemy.ext.declarative import declarative_base
 
 from config import Config
-from app.models.chat_models import azure_openai
+from app.llm_models.chat_models import azure_openai
 
 config = Config()
 
