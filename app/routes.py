@@ -102,10 +102,10 @@ def su_chat():
 
 @question_suggest_blueprint.route('/start', methods=['GET'])
 def start_questions():
-    onwarding_body = request.args.get("onwarding_body")
-    if onwarding_body == "buv":
+    awarding_body = request.args.get("awarding_body")
+    if awarding_body == "buv":
         connection_string = uni_dbs['British University Vietnam']
-    elif onwarding_body == "su":
+    elif awarding_body == "su":
         connection_string = uni_dbs['Staffordshire University']
 
     engine = create_engine(connection_string)
