@@ -47,3 +47,16 @@ class Config:
     print(f"{STARTING_TIME_FILE = }")
 
     SQLALCHEMY_DATABASE_URI = f'postgresql://{PG_VECTOR_USER}:{PG_VECTOR_PASSWORD}@{PG_VECTOR_HOST}/{PGDATABASE5}'
+    # configs for each awarding bodies
+    AB_CONFIGS = {
+        "buv": {
+            "full_name": "British University Vietnam",
+            "except_keywords": ["Stirling", "University of London", "UoL", "IFP", "Foundation", "Arts University Bournemouth", "Bournemouth", "AUB", "Staffordshire", "SU"]
+        },
+        "su": {
+            "full_name": "Staffordshire University",
+            "except_keywords": ["Stirling", "University of London", "UoL", "IFP", "Foundation", "Arts University Bournemouth", "Bournemouth", "AUB"]
+        }
+    }
+    THUMB_UP_VALUE = 1
+    THUMB_DOWN_VALUE = -1

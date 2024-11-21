@@ -1,17 +1,11 @@
 from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
-
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
 from openai import BadRequestError
 
 from app.database import initialize_retrievers
-from app.utils import language_detection_chain, FAQ, add_prefix_to_answer
+from app.utils import language_detection_chain, add_prefix_to_answer
 from app.chains import create_conversational_rag_chain, conversational_chain
 from config import Config
-
-
 
 config = Config()
 
@@ -32,13 +26,6 @@ def trim_message_history(session_id: str):
 def clear_history(session_id: str):
     if session_id in store:
         del store[session_id]
-
-# Create an engine that connects to the PostgreSQL database
-engine = create_engine(f"postgresql+psycopg://{config.PG_VECTOR_USER}:{config.PG_VECTOR_PASSWORD}@{config.PG_VECTOR_HOST}:{config.PGPORT}/{config.PGDATABASE5}")
-# Create a configured "Session" class
-Session = sessionmaker(bind=engine)
-# Create a session
-session = Session()
 
 def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
     try:
@@ -65,14 +52,6 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
             page_number = output.get("page_number")
             relevant_questions = output.get("relevant_questions")
 
-        # Save user_input and answer to question_answer table in the raw_data_users_20240826 database
-        # Create a new FAQ instance
-        new_faq = FAQ(question=user_input, answer=answer, bot_type=uni_name)
-        # Add the new instance to the session
-        session.add(new_faq)
-        # Commit the session to insert the data into the table
-        session.commit()
-        
         return {
             "answer": add_prefix_to_answer(answer, uni_name),
             "source": source,
@@ -84,13 +63,6 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
         print(e)
         standard_message = "For further assistance, please contact our Student Information Office via email at studentservice@buv.edu.vn or by phone at 0936 376 136."
         
-        # Create a new FAQ instance
-        new_faq = FAQ(question=user_input, answer=standard_message, bot_type=uni_name)
-        # Add the new instance to the session
-        session.add(new_faq)
-        # Commit the session to insert the data into the table
-        session.commit()
-        
         return {
             "answer": add_prefix_to_answer(standard_message, uni_name),
             "source": None,
@@ -99,5 +71,3 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
         }
     except Exception as e:
         print(e)
-    finally:
-        session.close()
