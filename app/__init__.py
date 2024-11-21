@@ -2,6 +2,7 @@ from flask import Flask
 
 from app.routes import chatbot_blueprint, question_suggest_blueprint
 from app.extensions import db, migrate, cors
+from app.commands import seed_chatbots, seed_users
 from config import Config
 
 
@@ -12,7 +13,9 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db)
     cors.init_app(app)
-    # CORS(app) # Allow connections from all origins
+    
+    app.cli.add_command(seed_users)
+    app.cli.add_command(seed_chatbots)
     
     # Register the API blueprint
     app.register_blueprint(chatbot_blueprint)

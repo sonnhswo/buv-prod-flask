@@ -3,8 +3,6 @@ from typing import Optional, Literal
 from pydantic import BaseModel, Field
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from sqlalchemy import Column, Integer, Text
-from sqlalchemy.ext.declarative import declarative_base
 
 from config import Config
 from app.llm_models.chat_models import azure_openai
@@ -36,19 +34,6 @@ language_detection_chain = (
     | azure_openai
     | StrOutputParser()
 )
-
-
-# Create a base class using declarative_base
-Base = declarative_base()
-
-# Define your table as a model class
-class FAQ(Base):
-    __tablename__ = 'question_answer'  # Table name in the database
-
-    id = Column(Integer, primary_key=True, autoincrement=True)  # Auto-incrementing primary key
-    question = Column(Text, nullable=False)  # Question column of type text
-    answer = Column(Text, nullable=False)  # Answer column of type text
-    bot_type = Column(Text, nullable=False)  # Bot type column of type text
 
 doc_options = ["BUV Frequently Asked Questions", "SU Frequently Asked Questions", "Student Handbook", "PSG Programme Handbook"]
 class FormatedOutput(BaseModel):
