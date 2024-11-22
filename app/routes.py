@@ -98,6 +98,16 @@ def thumb_down(message_id: int):
     else:
         return jsonify({"error": "Message not found"}), 404 
 
+@chatbot_blueprint.route('/unlike/<int:message_id>', methods=['GET'])
+def no_thumb(message_id: int):
+    message = ChatMessage.query.get(message_id)
+    if message:
+        message.like = config.NO_THUMB_VALUE
+        session.commit()
+        return jsonify({"message": "message unliked successfully"}), 200
+    else:
+        return jsonify({"error": "Message not found"}), 404 
+
 @question_suggest_blueprint.route('/start', methods=['GET'])
 def start_questions():
     awarding_body = request.args.get("awarding_body")

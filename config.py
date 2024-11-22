@@ -38,6 +38,7 @@ class Config:
     print(f"{PGDATABASE4 = }")
     PGDATABASE5 = os.getenv('PGDATABASE5') # Raw Data database
     print(f"{PGDATABASE5 = }")
+    PGDATABASE6 = os.getenv('PGDATABASE6') # Raw Data database
     DEMO_SU = os.getenv('DEMO_SU') # SU database
     print(f"{DEMO_SU = }")
     
@@ -46,7 +47,7 @@ class Config:
     STARTING_TIME_FILE = os.getenv('STARTING_TIME_FILE') # Handle Bus Schedule cases
     print(f"{STARTING_TIME_FILE = }")
 
-    SQLALCHEMY_DATABASE_URI = f'postgresql://{PG_VECTOR_USER}:{PG_VECTOR_PASSWORD}@{PG_VECTOR_HOST}/{PGDATABASE5}'
+    SQLALCHEMY_DATABASE_URI = f'postgresql://{PG_VECTOR_USER}:{PG_VECTOR_PASSWORD}@{PG_VECTOR_HOST}/{PGDATABASE6}'
     # configs for each awarding bodies
     AB_CONFIGS = {
         "buv": {
@@ -60,3 +61,4 @@ class Config:
     }
     THUMB_UP_VALUE = 1
     THUMB_DOWN_VALUE = -1
+    NO_THUMB_VALUE = 0
