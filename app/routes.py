@@ -108,14 +108,10 @@ def start_questions():
     elif awarding_body == "su":
         connection_string = uni_dbs['Staffordshire University']
 
-    engine = create_engine(connection_string)
-    connection = engine.connect()
-    cursor = connection.connection.cursor()
-    query = """SELECT document FROM langchain_pg_embedding
-                ORDER BY RANDOM()
-                LIMIT 10;"""
-    cursor.execute(query)
-    results = cursor.fetchall()
-    cursor.close()
-    results = [item[0].strip() for item in results]
+    results = [
+        "How can I book an appointment with a tutor for academic support?",
+        "What steps should I take if I am unable to attend an exam due to unforeseen circumstances?",
+        "How can I access career counselling or job placement services at BUV?",
+    ]
+    
     return jsonify({'relevant_questions': results})
