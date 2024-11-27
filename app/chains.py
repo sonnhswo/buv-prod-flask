@@ -24,7 +24,7 @@ def create_stuff_documents_chain(llm: AzureChatOpenAI,
             doc_str = f"""Source Name: {doc.metadata['title']} - Page {doc.metadata['page_number']}\nInformation: {doc.page_content}"""
             formatted.append(doc_str)
         return "\n\n".join(formatted)
-        
+    print("abc")
     return (
         RunnablePassthrough.assign(**{"context": format_docs}).with_config(
             run_name="format_inputs"
