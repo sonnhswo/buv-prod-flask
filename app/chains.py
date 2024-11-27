@@ -48,9 +48,9 @@ def create_conversational_rag_chain(retriever, get_session_history):
             output_messages_key="answer"
             )
 
-def suggest_relevant_questions_chain(chat_history, input, answer):
+def suggest_relevant_questions_chain(context, input, answer):
     chain = relevant_question_template | azure_openai.with_structured_output(RelevantQuestionsOutput)
-    response = chain.invoke({"chat_history": chat_history, "input": input, "answer": answer})
+    response = chain.invoke({"context": context, "input": input, "answer": answer})
     print("relevant questions:", response)
     return response
 def conversational_chain(conversational_rag_chain, query: str, session_id: str) -> dict:
@@ -62,7 +62,7 @@ def conversational_chain(conversational_rag_chain, query: str, session_id: str) 
             "configurable": {"session_id": session_id}
         }
     )
-    relevant_questions = suggest_relevant_questions_chain(response['chat_history'], query, response['answer'])
+    relevant_questions = suggest_relevant_questions_chain(response['context'], query, response['answer'])
     pprint.pprint(response)
     output = extract_formatted_answer(response['answer'])
     output['relevant_questions'] = relevant_questions.questions

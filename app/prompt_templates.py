@@ -67,16 +67,14 @@ system_template = ChatPromptTemplate.from_messages(
 )
 
 relevant_question_system_prompt = """
-    You are a communicator who helps customers communicate with the chatbot effectively. 
-    You have to suggest the user questions that they might be asking next based on the so-far conversation.
-    Generate maximum 3 questions for this purpose. Make it professional and stick to the context of the conversation.
+    You are a communicator who helps customers communicate with the chatbot effectively. You are givent a context, a previous question and answer of the customer.
+    You have to suggest questions that they might be asking next based on the context and the previous question and answer they have.
+    If the previous answer was only a greeting, wasn't related to the context, or doesn't answer the question, don't suggest anything.
+    Otherwise, suggest maximum 3 questions. Make sure the suggested questions are relevant to the previous question and the answers to these questions are in the given context.
+    
+    Context: {context}
+    Previous question: {input}
+    Previous answer: {answer}
 """
 
-relevant_question_template = ChatPromptTemplate.from_messages(
-    [
-        ("system", relevant_question_system_prompt),
-        MessagesPlaceholder("chat_history"),
-        ("human", "{input}"),
-        ("assistant", "{answer}")
-    ]
-)
+relevant_question_template = ChatPromptTemplate.from_template(relevant_question_system_prompt)
