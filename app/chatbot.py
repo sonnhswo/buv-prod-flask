@@ -8,14 +8,14 @@ from openai import BadRequestError
 
 from app.database import initialize_retrievers
 from app.utils import language_detection_chain, FAQ, add_prefix_to_answer
-from app.chains import create_conversational_rag_chain, conversational_chain
+from app.chains import create_conversational_rag_chain, create_relevant_questions_chain, conversational_chain
 from config import Config
 
 
 
 config = Config()
 
-retrievers = initialize_retrievers()
+doc_retrievers, question_retrievers = initialize_retrievers()
 
 # Managing chat history
 store = {}
@@ -51,14 +51,16 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
             relevant_questions = []
         else:
             # create history aware retriever
-            retriever = retrievers[uni_name]
+            doc_retriever = doc_retrievers[uni_name]
+            question_retriever = question_retrievers[uni_name]
             
-            conversational_rag_chain = create_conversational_rag_chain(retriever, get_session_history)
+            conversational_rag_chain = create_conversational_rag_chain(doc_retriever, get_session_history)
+            relevant_questions_chain = create_relevant_questions_chain(question_retriever)
 
             print(f"Before trimming {store=}")
             trim_message_history(session_id)
             print(f"After trimming {store=}")
-            output = conversational_chain(conversational_rag_chain, user_input, session_id)
+            output = conversational_chain(conversational_rag_chain, relevant_questions_chain, user_input, session_id)
             
             answer = output.get("answer")
             source = output.get("source")
