@@ -9,7 +9,7 @@ from langchain.retrievers import MultiVectorRetriever
 from langchain.retrievers.multi_vector import SearchType
 
 from config import Config
-from app.models.embeddings import text_embedding_3large
+from app.llm_models.embeddings import text_embedding_3large
 from app.custom_docstore import PostgresStore
 
 config = Config()
