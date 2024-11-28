@@ -4,7 +4,7 @@ from openai import BadRequestError
 
 from app.database import initialize_retrievers
 from app.utils import language_detection_chain, add_prefix_to_answer
-from app.chains import create_conversational_rag_chain, conversational_chain
+from app.chains import create_conversational_rag_chain, create_relevant_questions_chain, conversational_chain
 from config import Config
 
 config = Config()
