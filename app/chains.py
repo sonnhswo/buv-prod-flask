@@ -12,8 +12,8 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_openai import AzureChatOpenAI
 
-from .utils import FormatedOutput, RelevantQuestionsOutput, stringify_formatted_answer, extract_formatted_answer
-from .prompt_templates import contextualized_template, system_template, relevant_question_template
+from .utils import FormatedOutput, stringify_formatted_answer, extract_formatted_answer
+from .prompt_templates import contextualized_template, system_template
 
 def create_stuff_documents_chain(llm: AzureChatOpenAI, 
                                             prompt: ChatPromptTemplate, 
@@ -48,12 +48,13 @@ def create_conversational_rag_chain(retriever, get_session_history):
             output_messages_key="answer"
             )
 
-def suggest_relevant_questions_chain(context, input, answer):
-    chain = relevant_question_template | azure_openai.with_structured_output(RelevantQuestionsOutput)
-    response = chain.invoke({"context": context, "input": input, "answer": answer})
-    print("relevant questions:", response)
-    return response
-def conversational_chain(conversational_rag_chain, query: str, session_id: str) -> dict:
+def create_relevant_questions_chain(retriever):
+    def get_content_only(doc_list):
+        return [doc.page_content for doc in doc_list]
+    chain = retriever | get_content_only
+    return chain
+
+def conversational_chain(conversational_rag_chain, relevant_questions_chain, query: str, session_id: str) -> dict:
     print(f"{query=}")
     print(f"{session_id=}")
     response = conversational_rag_chain.invoke(
@@ -62,8 +63,8 @@ def conversational_chain(conversational_rag_chain, query: str, session_id: str) 
             "configurable": {"session_id": session_id}
         }
     )
-    relevant_questions = suggest_relevant_questions_chain(response['context'], query, response['answer'])
     pprint.pprint(response)
+    relevant_questions = relevant_questions_chain.invoke(str(response['context']))
     output = extract_formatted_answer(response['answer'])
-    output['relevant_questions'] = relevant_questions.questions
+    output['relevant_questions'] = relevant_questions
     return output

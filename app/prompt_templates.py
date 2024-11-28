@@ -65,16 +65,3 @@ system_template = ChatPromptTemplate.from_messages(
         ("human", "{input}")
     ]
 )
-
-relevant_question_system_prompt = """
-    You are a communicator who helps customers communicate with the chatbot effectively. You are givent a context, a previous question and answer of the customer.
-    You have to suggest questions that they might be asking next based on the context and the previous question and answer they have.
-    If the previous answer was only a greeting, wasn't related to the context, or doesn't answer the question, don't suggest anything.
-    Otherwise, suggest maximum 3 questions. Make sure the suggested questions are relevant to the previous question and the answers to these questions are in the given context.
-    
-    Context: {context}
-    Previous question: {input}
-    Previous answer: {answer}
-"""
-
-relevant_question_template = ChatPromptTemplate.from_template(relevant_question_system_prompt)

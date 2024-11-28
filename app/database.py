@@ -4,6 +4,7 @@ from flask_sqlalchemy import SQLAlchemy
 from typing import Dict
 
 from langchain_postgres.vectorstores import PGVector
+from langchain_core.vectorstores import VectorStoreRetriever
 from langchain.retrievers import MultiVectorRetriever
 from langchain.retrievers.multi_vector import SearchType
 
@@ -19,8 +20,9 @@ uni_dbs = {
     "Staffordshire University": f"postgresql+psycopg://{config.PG_VECTOR_USER}:{config.PG_VECTOR_PASSWORD}@{config.PG_VECTOR_HOST}:{config.PGPORT}/{config.DEMO_SU}"
 }
 
-def initialize_retrievers() -> Dict[str, MultiVectorRetriever]:
-    retriever_dict = {}
+def initialize_retrievers() -> tuple[Dict[str, MultiVectorRetriever], Dict[str, VectorStoreRetriever]]:
+    doc_retriever_dict = {}
+    question_retriever_dict = {}
     for uni_name, connection_string in uni_dbs.items():
     
         vectorstore = PGVector(
@@ -30,14 +32,16 @@ def initialize_retrievers() -> Dict[str, MultiVectorRetriever]:
         )
     
         id_key = "doc_id"
-        retriever = MultiVectorRetriever(
+        doc_retriever = MultiVectorRetriever(
             vectorstore=vectorstore,
             docstore=PostgresStore(connection_string=connection_string),
             id_key=id_key,
             search_kwargs={"k": 6, "fetch_k": 8}
         )
-        retriever.search_type = SearchType.mmr
-        retriever_dict[uni_name] = retriever
-    return retriever_dict
+        question_retriever = vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": 3, "lambda_mult": 0})
+        doc_retriever.search_type = SearchType.mmr
+        doc_retriever_dict[uni_name] = doc_retriever
+        question_retriever_dict[uni_name] = question_retriever
+    return doc_retriever_dict, question_retriever_dict
 
 
