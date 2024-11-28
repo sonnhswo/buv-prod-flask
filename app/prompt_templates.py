@@ -65,3 +65,11 @@ system_template = ChatPromptTemplate.from_messages(
         ("human", "{input}")
     ]
 )
+
+relevant_question_system_prompt = """
+    You are a question reformater. Your job is to remove multi-language part in the question and keep only the English part.
+    Remember to only remove the non-English parts, don't change anything else.
+    The questions are: {questions}
+"""
+
+relevant_question_template = ChatPromptTemplate.from_template(relevant_question_system_prompt)
