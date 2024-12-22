@@ -2,12 +2,12 @@
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 # More info on Python, GitHub Actions, and Azure App Service: https://aka.ms/python-webapps-actions
 
-name: Build and deploy Python app to Azure Web App - buv-flask
+name: Build and deploy Python app to Azure Web App - dev-buv-flask
 
 on:
   push:
     branches:
-      - master
+      - update/like_dislike
   workflow_dispatch:
 
 jobs:
@@ -65,14 +65,14 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_D7D462BA2DDE4B3B81A877BBB9408482 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_CCC43E8440FA40988319C9264AAE78F2 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_1BFE539338BF45DCAA14416BC9FBCCF0 }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_78D0DAC69C6B4DA984166760DB2D7EF6 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_54BC8D21C06C451999502491C48F0196 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_D69E94A251EC43C68661344D8EE77390 }}
 
       - name: 'Deploy to Azure Web App'
         uses: azure/webapps-deploy@v3
         id: deploy-to-webapp
         with:
-          app-name: 'buv-flask'
+          app-name: 'dev-buv-flask'
           slot-name: 'Production'
           

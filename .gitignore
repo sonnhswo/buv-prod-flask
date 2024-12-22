@@ -172,9 +172,16 @@ debug.ipynb
 
 test.py
 
+test/
+data/
+
 .env_
 
 .env
 
 requirements2.txt
 tmp.drawio
+
+master_buv-flask.yml
+
+notebooks/
