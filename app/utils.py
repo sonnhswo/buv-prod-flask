@@ -35,11 +35,11 @@ language_detection_chain = (
     | StrOutputParser()
 )
 
-doc_options = ["BUV Frequently Asked Questions", "SU Frequently Asked Questions", "Student Handbook", "PSG Programme Handbook"]
+doc_options = ["BUV Frequently Asked Questions", "SU Frequently Asked Questions", "Student Handbook", "PSG Programme Handbook", "Outbound Mobility Handbook & FAQ"]
 class FormatedOutput(BaseModel):
     answer: str = Field(description="The answer to the user question")
     # source: Optional[Literal[*np.array(doc_options)]] = Field(description=f"Source document of the information retrieved, should be one of these options: {doc_options}") #type:ignore
-    source: Optional[Literal["BUV Frequently Asked Questions", "SU Frequently Asked Questions", "Student Handbook", "PSG Programme Handbook"]] = Field(default=None, description=f"Source document of the information retrieved, should be one of these options: {doc_options}") #type:ignore
+    source: Optional[Literal["BUV Frequently Asked Questions", "SU Frequently Asked Questions", "Student Handbook", "PSG Programme Handbook", "Outbound Mobility Handbook & FAQ"]] = Field(default=None, description=f"Source document of the information retrieved, should be one of these options: {doc_options}") #type:ignore
     page_number: Optional[str] = Field(default=None, description="The page number in the document where the information was retrieved")
 
 def stringify_formatted_answer(inputs: FormatedOutput) -> str:
