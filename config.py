@@ -64,11 +64,11 @@ class Config:
         },
         "uol": {
             "full_name": "University of London",
-            "except_keywords": ["Stirling", "IFP", "Foundation", "Arts University Bournemouth", "Bournemouth", "AUB", "Staffordshire", "SU", "BUV"]
+            "except_keywords": ["Stirling", "IFP", "Foundation", "Arts University Bournemouth", "Bournemouth", "AUB", "Staffordshire", "SU"]
         },
         "ifp": {
             "full_name": "International Foundation Programme",
-            "except_keywords": ["Stirling", "University of London", "Arts University Bournemouth", "Bournemouth", "AUB", "Staffordshire", "SU", "BUV"]
+            "except_keywords": ["Stirling", "Arts University Bournemouth", "Bournemouth", "AUB", "Staffordshire", "SU"]
         }
     }
     THUMB_UP_VALUE = 1
