@@ -9,7 +9,7 @@ from app.db_models.raw_db import db, Chatbot  # Adjust the import based on your 
 @with_appcontext
 def seed_chatbots():
     """Seed the roles table with default data."""
-    names = ["buv", "su", "uol", "ifp", "aub"]
+    names = ["buv", "su", "uol", "ifp", "aub", "us"]
 
     for name in names:
         if not Chatbot.query.filter_by(name=name).first():
