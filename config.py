@@ -45,6 +45,8 @@ class Config:
     print(f"{DEMO_UOL = }")
     DEMO_IFP = os.getenv('DEMO_IFP') # IFP database
     print(f"{DEMO_IFP = }")
+    DEMO_AUB = os.getenv('DEMO_AUB') # AUB database
+    print(f"{DEMO_AUB = }")
     
     BUS_SCHEDULE_FILE = os.getenv('BUS_SCHEDULE_FILE') # Handle Bus Schedule cases
     print(f"{BUS_SCHEDULE_FILE = }")
@@ -69,6 +71,10 @@ class Config:
         "ifp": {
             "full_name": "International Foundation Programme",
             "except_keywords": ["Stirling", "Arts University Bournemouth", "Bournemouth", "AUB", "Staffordshire", "SU"]
+        },
+        "aub": {
+            "full_name": "Arts University Bournemouth",
+            "except_keywords": ["Stirling", "University of London", "UoL", "IFP", "Foundation", "Staffordshire", "SU"]
         }
     }
     THUMB_UP_VALUE = 1
