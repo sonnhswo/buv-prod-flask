@@ -41,14 +41,14 @@ class Config:
     PGDATABASE6 = os.getenv('PGDATABASE6') # Raw Data database
     DEMO_SU = os.getenv('DEMO_SU') # SU database
     print(f"{DEMO_SU = }")
-    DEMO_UOL = os.getenv('DEMO_UOL') # UOL database
-    print(f"{DEMO_UOL = }")
-    DEMO_IFP = os.getenv('DEMO_IFP') # IFP database
-    print(f"{DEMO_IFP = }")
-    DEMO_AUB = os.getenv('DEMO_AUB') # AUB database
-    print(f"{DEMO_AUB = }")
-    DEMO_US = os.getenv('DEMO_US') # US database
-    print(f"{DEMO_US = }")
+    PROD_UOL = os.getenv('DEMO_UOL') # UOL database
+    print(f"{PROD_UOL = }")
+    PROD_IFP = os.getenv('DEMO_IFP') # IFP database
+    print(f"{PROD_IFP = }")
+    PROD_AUB = os.getenv('DEMO_AUB') # AUB database
+    print(f"{PROD_AUB = }")
+    PROD_US = os.getenv('DEMO_US') # US database
+    print(f"{PROD_US = }")
     
     BUS_SCHEDULE_FILE = os.getenv('BUS_SCHEDULE_FILE') # Handle Bus Schedule cases
     print(f"{BUS_SCHEDULE_FILE = }")
