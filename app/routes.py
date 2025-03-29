@@ -68,7 +68,8 @@ def chat(awarding_body: str):
     
     if ask_relevant_question:
         response = generate_response(user_input, str(session_id), full_name)
-
+        # print(f"{response=}")
+        
     new_human_message = ChatMessage(message=user_input, is_user_message=True, session_id=session_id)
     new_ai_message = ChatMessage(message=response["answer"], is_user_message=False, session_id=session_id)
     session.add(new_human_message)

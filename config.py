@@ -41,6 +41,14 @@ class Config:
     PGDATABASE6 = os.getenv('PGDATABASE6') # Raw Data database
     DEMO_SU = os.getenv('DEMO_SU') # SU database
     print(f"{DEMO_SU = }")
+    DEMO_UOL = os.getenv('DEMO_UOL') # UOL database
+    print(f"{DEMO_UOL = }")
+    DEMO_IFP = os.getenv('DEMO_IFP') # IFP database
+    print(f"{DEMO_IFP = }")
+    DEMO_AUB = os.getenv('DEMO_AUB') # AUB database
+    print(f"{DEMO_AUB = }")
+    DEMO_US = os.getenv('DEMO_US') # US database
+    print(f"{DEMO_US = }")
     
     BUS_SCHEDULE_FILE = os.getenv('BUS_SCHEDULE_FILE') # Handle Bus Schedule cases
     print(f"{BUS_SCHEDULE_FILE = }")
@@ -57,6 +65,22 @@ class Config:
         "su": {
             "full_name": "Staffordshire University",
             "except_keywords": ["Stirling", "University of London", "UoL", "IFP", "Foundation", "Arts University Bournemouth", "Bournemouth", "AUB"]
+        },
+        "uol": {
+            "full_name": "University of London",
+            "except_keywords": ["Stirling", "IFP", "Foundation", "Arts University Bournemouth", "Bournemouth", "AUB", "Staffordshire", "SU"]
+        },
+        "ifp": {
+            "full_name": "International Foundation Programme",
+            "except_keywords": ["Stirling", "Arts University Bournemouth", "Bournemouth", "AUB", "Staffordshire", "SU"]
+        },
+        "aub": {
+            "full_name": "Arts University Bournemouth",
+            "except_keywords": ["Stirling", "University of London", "UoL", "IFP", "Foundation", "Staffordshire", "SU"]
+        },
+        "us": {
+            "full_name": "University of Stirling",
+            "except_keywords": ["University of London", "UoL", "IFP", "Foundation", "Staffordshire", "SU", "AUB", "Arts University Bournemouth"]
         }
     }
     THUMB_UP_VALUE = 1
