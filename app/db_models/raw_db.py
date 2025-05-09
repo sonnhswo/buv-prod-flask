@@ -1,4 +1,6 @@
-from sqlalchemy import Column, Integer, Text, String, ForeignKey, Boolean, UniqueConstraint, UUID
+from sqlalchemy import Column, Integer, Text, String, ForeignKey, Boolean, UniqueConstraint, UUID, DateTime
+from datetime import datetime, timezone, timedelta
+
 from ..extensions import db
 
 class Chatbot(db.Model):
@@ -15,6 +17,7 @@ class ChatSession(db.Model):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
     chatbot_id = Column(Integer, ForeignKey('chatbot.id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.now(timezone.utc)+timedelta(hours=7))
     messages = db.relationship('ChatMessage', backref='chat_session', lazy=True)
 
 class ChatMessage(db.Model):
@@ -23,3 +26,4 @@ class ChatMessage(db.Model):
     like = Column(Integer, default=0)
     is_user_message = Column(Boolean, nullable=False)
     session_id = Column(Integer, ForeignKey('chat_session.id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.now(timezone.utc)+timedelta(hours=7))
