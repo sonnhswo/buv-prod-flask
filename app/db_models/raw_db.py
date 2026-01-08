@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, Text, String, ForeignKey, Boolean, UniqueConstraint, UUID
 from ..extensions import db
+import bcrypt
 
 class Chatbot(db.Model):
     id = Column(Integer, primary_key=True)
@@ -9,7 +10,15 @@ class Chatbot(db.Model):
 class User(db.Model):
     id = Column(Integer, primary_key=True)
     name = Column(String(128))
+    email = Column(String(120), unique=True, nullable=False)
+    password_hash = Column(String(256))
     sessions = db.relationship('ChatSession', backref='user', lazy=True)
+
+    def set_password(self, password):
+        self.password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+    def check_password(self, password):
+        return bcrypt.checkpw(password.encode('utf-8'), self.password_hash.encode('utf-8'))
 
 class ChatSession(db.Model):
     id = Column(Integer, primary_key=True)

@@ -11,7 +11,8 @@ def seed_users():
 
     for name in names:
         if not User.query.filter_by(name=name).first():
-            user = User(id="0", name=name)
+            user = User(id=0, name=name, email=f"{name}@buv.edu.vn")
+            user.set_password("admin123")
             db.session.add(user)
 
     db.session.commit()
