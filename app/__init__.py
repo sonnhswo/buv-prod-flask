@@ -1,4 +1,5 @@
 from flask import Flask
+from flasgger import Swagger
 
 from app.routes import chatbot_blueprint, question_suggest_blueprint
 from app.extensions import db, migrate, cors
@@ -13,12 +14,13 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db)
     cors.init_app(app)
+    swagger = Swagger(app)
     
     app.cli.add_command(seed_users)
     app.cli.add_command(seed_chatbots)
     
     # Register the API blueprint
-    app.register_blueprint(chatbot_blueprint)
+    app.register_blueprint(chatbot_blueprint, url_prefix="/chatbot")
     app.register_blueprint(question_suggest_blueprint, url_prefix="/question_suggest")
 
     from .db_models import raw_db

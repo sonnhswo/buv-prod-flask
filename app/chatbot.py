@@ -2,6 +2,7 @@ from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
 from openai import BadRequestError
 
+from app.db_models.raw_db import Chatbot
 from app.database import initialize_retrievers
 from app.utils import language_detection_chain, add_prefix_to_answer
 from app.chains import create_conversational_rag_chain, create_relevant_questions_chain, conversational_chain
@@ -9,7 +10,21 @@ from config import Config
 
 config = Config()
 
-doc_retrievers, question_retrievers = initialize_retrievers()
+# Lazy initialization - will be loaded on first access
+doc_retrievers = None
+question_retrievers = None
+
+def get_retrievers():
+    """Lazy load retrievers on first access."""
+    global doc_retrievers, question_retrievers
+    if doc_retrievers is None or question_retrievers is None:
+        doc_retrievers, question_retrievers = initialize_retrievers()
+    return doc_retrievers, question_retrievers
+
+def get_list_chatbots():
+    # Retrieve chatbot names from the database
+    chatbots = Chatbot.query.all()
+    return [chatbot.name for chatbot in chatbots]
 
 # Managing chat history
 store = {}
@@ -37,6 +52,9 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
             page_number = None
             relevant_questions = []
         else:
+            # Get retrievers (lazy loaded)
+            doc_retrievers, question_retrievers = get_retrievers()
+
             # create history aware retriever
             doc_retriever = doc_retrievers[uni_name]
             question_retriever = question_retrievers[uni_name]

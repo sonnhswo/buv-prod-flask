@@ -9,12 +9,24 @@ from app.db_models.raw_db import db, Chatbot  # Adjust the import based on your 
 @with_appcontext
 def seed_chatbots():
     """Seed the roles table with default data."""
-    names = ["buv", "su", "uol", "ifp", "aub", "us"]
+    # Map chatbot names to their respective database names
+    chatbot_configs = [
+        {"name": "buv", "database_name": current_app.config.get('PGDATABASE')},
+        {"name": "su", "database_name": current_app.config.get('DEMO_SU')},
+        {"name": "uol", "database_name": current_app.config.get('PROD_UOL')},
+        {"name": "ifp", "database_name": current_app.config.get('PROD_IFP')},
+        {"name": "aub", "database_name": current_app.config.get('PROD_AUB')},
+        {"name": "us", "database_name": current_app.config.get('PROD_US')},
+    ]
 
-    for name in names:
-        if not Chatbot.query.filter_by(name=name).first():
-            chatbot = Chatbot(name=name)
+    for config in chatbot_configs:
+        existing_chatbot = Chatbot.query.filter_by(name=config["name"]).first()
+        if not existing_chatbot:
+            chatbot = Chatbot(name=config["name"], database_name=config["database_name"])
             db.session.add(chatbot)
+        else:
+            # Update database_name if chatbot already exists
+            existing_chatbot.database_name = config["database_name"]
 
     db.session.commit()
     current_app.logger.info("Chatbots seeded successfully.")

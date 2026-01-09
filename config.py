@@ -28,34 +28,25 @@ class Config:
     PG_VECTOR_PASSWORD = os.getenv('PG_VECTOR_PASSWORD')
     PGPORT = os.getenv('PGPORT')
     
+    # Vector database names for each chatbot (stored in DB, loaded here for seeding)
     PGDATABASE = os.getenv('PGDATABASE') # BUV database
-    print(f"{PGDATABASE = }")
-    PGDATABASE2 = os.getenv('PGDATABASE2') # Bus Schedule database
-    print(f"{PGDATABASE2 = }")
-    PGDATABASE3 = os.getenv('PGDATABASE3') # Bus General Info database
-    print(f"{PGDATABASE3 = }")
-    PGDATABASE4 = os.getenv('PGDATABASE4') # Unclear Questions database
-    print(f"{PGDATABASE4 = }")
-    PGDATABASE5 = os.getenv('PGDATABASE5') # Raw Data database
-    print(f"{PGDATABASE5 = }")
-    PGDATABASE6 = os.getenv('PGDATABASE6') # Raw Data database
     DEMO_SU = os.getenv('DEMO_SU') # SU database
-    print(f"{DEMO_SU = }")
     PROD_UOL = os.getenv('DEMO_UOL') # UOL database
-    print(f"{PROD_UOL = }")
     PROD_IFP = os.getenv('DEMO_IFP') # IFP database
-    print(f"{PROD_IFP = }")
     PROD_AUB = os.getenv('DEMO_AUB') # AUB database
-    print(f"{PROD_AUB = }")
     PROD_US = os.getenv('DEMO_US') # US database
-    print(f"{PROD_US = }")
+
+    PGDATABASE_USER = os.getenv('PGDATABASE_USER')
+    PGDATABASE_PASSWORD = os.getenv('PGDATABASE_PASSWORD')
+    PGDATABASE_HOST = os.getenv('PGDATABASE_HOST')
+    PGDATABASE_DB = os.getenv('PGDATABASE_DB')
     
     BUS_SCHEDULE_FILE = os.getenv('BUS_SCHEDULE_FILE') # Handle Bus Schedule cases
     print(f"{BUS_SCHEDULE_FILE = }")
     STARTING_TIME_FILE = os.getenv('STARTING_TIME_FILE') # Handle Bus Schedule cases
     print(f"{STARTING_TIME_FILE = }")
 
-    SQLALCHEMY_DATABASE_URI = f'postgresql://{PG_VECTOR_USER}:{PG_VECTOR_PASSWORD}@{PG_VECTOR_HOST}/{PGDATABASE6}'
+    SQLALCHEMY_DATABASE_URI = f'postgresql://{PGDATABASE_USER}:{PGDATABASE_PASSWORD}@{PGDATABASE_HOST}/{PGDATABASE_DB}'
     # configs for each awarding bodies
     AB_CONFIGS = {
         "buv": {

@@ -1,13 +1,13 @@
 import uuid
 from flask import Blueprint, request, jsonify
 from sqlalchemy import create_engine
+from flasgger import swag_from
 
 from app.chatbot import clear_history
 from app.chatbot import generate_response
 from app.db_models.raw_db import ChatSession, Chatbot, ChatMessage
 from app.extensions import db
 from config import Config
-from .database import uni_dbs
 
 config = Config()
 # Create a session
@@ -16,8 +16,86 @@ session = db.session
 chatbot_blueprint = Blueprint('chatbot', __name__)
 question_suggest_blueprint = Blueprint('question_suggest', __name__)
 
+@chatbot_blueprint.route('/list', methods=['GET'])
+def get_chatbots():
+    """
+    Get list of all chatbots with their details.
+    ---
+    responses:
+      200:
+        description: List of chatbots retrieved successfully
+        schema:
+          type: object
+          properties:
+            chatbots:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  name:
+                    type: string
+                  description:
+                    type: string
+                  database_name:
+                    type: string
+                  is_active:
+                    type: boolean
+                  publish_date:
+                    type: string
+                    format: date-time
+                  created_at:
+                    type: string
+                    format: date-time
+    """
+    chatbots = Chatbot.query.all()
+    chatbot_list = []
+
+    for chatbot in chatbots:
+        chatbot_data = {
+            "id": chatbot.id,
+            "name": chatbot.name,
+            "description": chatbot.description,
+            "database_name": chatbot.database_name,
+            "is_active": chatbot.is_active,
+            "publish_date": chatbot.publish_date.isoformat() if chatbot.publish_date else None,
+            "created_at": chatbot.created_at.isoformat() if chatbot.created_at else None
+        }
+
+        # Add full name from config if available
+        if chatbot.name in config.AB_CONFIGS:
+            chatbot_data["full_name"] = config.AB_CONFIGS[chatbot.name].get("full_name")
+
+        chatbot_list.append(chatbot_data)
+
+    return jsonify({"chatbots": chatbot_list}), 200
+
 @chatbot_blueprint.route('/<string:chatbot_name>/new_session_id', methods=['GET'])
 def get_new_session_id(chatbot_name):
+    """
+    Get a new session ID for a chatbot.
+    ---
+    parameters:
+      - name: chatbot_name
+        in: path
+        type: string
+        required: true
+        description: The name of the chatbot
+    responses:
+      200:
+        description: New session created successfully
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+            data:
+              type: object
+              properties:
+                session_id:
+                  type: integer
+    """
     chatbot = Chatbot.query.filter_by(name=chatbot_name).first()
     new_record = ChatSession(user_id="0", chatbot_id=chatbot.id)
     session.add(new_record)
@@ -29,6 +107,23 @@ def get_new_session_id(chatbot_name):
 
 @chatbot_blueprint.route('/clear_conversation', methods=['POST'])
 def clear_conversation():
+    """
+    Clear the conversation history for a session.
+    ---
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            session_id:
+              type: integer
+              description: The session ID to clear
+    responses:
+      200:
+        description: Conversation cleared
+    """
     data: dict = request.json
     session_id: int = data.get('session_id')
     clear_history(str(session_id))
@@ -37,6 +132,50 @@ def clear_conversation():
 
 @chatbot_blueprint.route('/<string:awarding_body>', methods=['POST'])
 def chat(awarding_body: str):
+    """
+    Send a message to the chatbot and get a response.
+    ---
+    parameters:
+      - name: awarding_body
+        in: path
+        type: string
+        required: true
+        description: The awarding body (e.g., buv, su)
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              description: The user's message
+            session_id:
+              type: integer
+              description: The session ID
+    responses:
+      200:
+        description: Chat response
+        schema:
+          type: object
+          properties:
+            answer:
+              type: string
+            source:
+              type: string
+            page_number:
+              type: integer
+            relevant_questions:
+              type: array
+              items:
+                type: string
+            ai_message_id:
+              type: integer
+      400:
+        description: No message provided
+      404:
+        description: Awarding body not found
+    """
     data: dict = request.json
     user_input: str = data.get('message')
     session_id: int = data.get('session_id')
@@ -81,6 +220,21 @@ def chat(awarding_body: str):
 
 @chatbot_blueprint.route('/like/<int:message_id>', methods=['GET'])
 def thumb_up(message_id: int):
+    """
+    Like a message.
+    ---
+    parameters:
+      - name: message_id
+        in: path
+        type: integer
+        required: true
+        description: The ID of the message to like
+    responses:
+      200:
+        description: Message liked successfully
+      404:
+        description: Message not found
+    """
     message = ChatMessage.query.get(message_id)
     if message:
         message.like = config.THUMB_UP_VALUE
@@ -91,6 +245,21 @@ def thumb_up(message_id: int):
 
 @chatbot_blueprint.route('/dislike/<int:message_id>', methods=['GET'])
 def thumb_down(message_id: int):
+    """
+    Dislike a message.
+    ---
+    parameters:
+      - name: message_id
+        in: path
+        type: integer
+        required: true
+        description: The ID of the message to dislike
+    responses:
+      200:
+        description: Message disliked successfully
+      404:
+        description: Message not found
+    """
     message = ChatMessage.query.get(message_id)
     if message:
         message.like = config.THUMB_DOWN_VALUE
@@ -101,6 +270,21 @@ def thumb_down(message_id: int):
 
 @chatbot_blueprint.route('/unlike/<int:message_id>', methods=['GET'])
 def no_thumb(message_id: int):
+    """
+    Remove like/dislike from a message.
+    ---
+    parameters:
+      - name: message_id
+        in: path
+        type: integer
+        required: true
+        description: The ID of the message to unlike
+    responses:
+      200:
+        description: Message unliked successfully
+      404:
+        description: Message not found
+    """
     message = ChatMessage.query.get(message_id)
     if message:
         message.like = config.NO_THUMB_VALUE
@@ -111,11 +295,38 @@ def no_thumb(message_id: int):
 
 @question_suggest_blueprint.route('/start', methods=['GET'])
 def start_questions():
+    """
+    Get suggested questions for an awarding body.
+    ---
+    parameters:
+      - name: awarding_body
+        in: query
+        type: string
+        required: true
+        description: The awarding body (buv or su)
+    responses:
+      200:
+        description: List of relevant questions
+        schema:
+          type: object
+          properties:
+            relevant_questions:
+              type: array
+              items:
+                type: string
+    """
     awarding_body = request.args.get("awarding_body")
     if awarding_body == "buv":
-        connection_string = uni_dbs['British University Vietnam']
+        chatbot = Chatbot.query.filter_by(name='buv').first()
     elif awarding_body == "su":
-        connection_string = uni_dbs['Staffordshire University']
+        chatbot = Chatbot.query.filter_by(name='su').first()
+    else:
+        return jsonify({'error': 'Invalid awarding body'}), 400
+    
+    if not chatbot:
+        return jsonify({'error': 'Chatbot not found'}), 404
+    
+    connection_string = chatbot.vector_db_connection_string
 
     results = [
         "How can I book an appointment with a tutor for academic support?",
