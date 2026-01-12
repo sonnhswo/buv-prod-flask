@@ -24,13 +24,7 @@ def upgrade():
     sa.Column('last_update', sa.DateTime(), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
-    op.drop_table('docstore')
-    with op.batch_alter_table('langchain_pg_embedding', schema=None) as batch_op:
-        batch_op.drop_index('ix_cmetadata_gin', postgresql_using='gin')
-        batch_op.drop_index('ix_langchain_pg_embedding_id')
-
-    op.drop_table('langchain_pg_embedding')
-    op.drop_table('langchain_pg_collection')
+    
     with op.batch_alter_table('chatbot', schema=None) as batch_op:
         batch_op.add_column(sa.Column('description', sa.Text(), nullable=True))
         batch_op.add_column(sa.Column('publish_date', sa.DateTime(), nullable=True))
