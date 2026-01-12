@@ -1,10 +1,11 @@
 import uuid
 from flask import Blueprint, request, jsonify
 from sqlalchemy import create_engine
+from datetime import datetime
 
 from app.chatbot import clear_history
 from app.chatbot import generate_response
-from app.db_models.raw_db import ChatSession, Chatbot, ChatMessage
+from app.db_models.raw_db import ChatSession, Chatbot, ChatMessage, QnAFile
 from app.extensions import db
 from config import Config
 from .database import uni_dbs
@@ -108,6 +109,100 @@ def no_thumb(message_id: int):
         return jsonify({"message": "message unliked successfully"}), 200
     else:
         return jsonify({"error": "Message not found"}), 404 
+
+@chatbot_blueprint.route('/api/chatbots', methods=['GET'])
+def get_chatbots():
+    bots = Chatbot.query.order_by(Chatbot.created_at.desc()).all()
+    return jsonify([{
+        "id": f"CB{b.id:03d}",
+        "name": b.name,
+        "description": b.description or "",
+        "publishDate": b.publish_date.strftime("%d/%m/%Y") if b.publish_date else "",
+        "createdAt": b.created_at.strftime("%d/%m/%Y") if b.created_at else "",
+        "lastModified": b.last_modified.strftime("%I:%M %p %d/%m/%Y") if b.last_modified else "",
+        "status": b.status
+    } for b in bots])
+
+@chatbot_blueprint.route('/api/chatbots/<string:id>', methods=['GET'])
+def get_chatbot(id):
+    # Strip CB prefix if present
+    db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    b = Chatbot.query.get(db_id)
+    if not b:
+        return jsonify({"error": "Chatbot not found"}), 404
+    return jsonify({
+        "id": f"CB{b.id:03d}",
+        "name": b.name,
+        "description": b.description or "",
+        "publishDate": b.publish_date.strftime("%Y-%m-%dT%H:%M:%S.%fZ") if b.publish_date else "", # ISO format for form
+        "createdAt": b.created_at.strftime("%d/%m/%Y") if b.created_at else "",
+        "lastModified": b.last_modified.strftime("%I:%M %p %d/%m/%Y") if b.last_modified else "",
+        "status": b.status
+    })
+
+@chatbot_blueprint.route('/api/chatbots', methods=['POST'])
+def create_chatbot():
+    data = request.json
+    new_bot = Chatbot(
+        name=data.get('name'),
+        description=data.get('description'),
+        publish_date=datetime.fromisoformat(data.get('schedulePublish').replace('Z', '+00:00')) if data.get('schedulePublish') else None,
+        status='Active' if data.get('status') else 'Inactive'
+    )
+    session.add(new_bot)
+    session.commit()
+    return jsonify({"message": "Created", "id": f"CB{new_bot.id:03d}"}), 201
+
+@chatbot_blueprint.route('/api/chatbots/<string:id>', methods=['PUT'])
+def update_chatbot(id):
+    db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    bot = Chatbot.query.get(db_id)
+    if not bot:
+        return jsonify({"error": "Not found"}), 404
+    data = request.json
+    bot.name = data.get('name', bot.name)
+    bot.description = data.get('description', bot.description)
+    if data.get('schedulePublish'):
+        bot.publish_date = datetime.fromisoformat(data.get('schedulePublish').replace('Z', '+00:00'))
+    bot.status = 'Active' if data.get('status') == 'Active' or data.get('status') is True else 'Inactive'
+    session.commit()
+    return jsonify({"message": "Updated"}), 200
+
+@chatbot_blueprint.route('/api/chatbots/<string:id>/status', methods=['PATCH'])
+def update_chatbot_status(id):
+    db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    bot = Chatbot.query.get(db_id)
+    if not bot:
+        return jsonify({"error": "Not found"}), 404
+    data = request.json
+    bot.status = data.get('status')
+    session.commit()
+    return jsonify({"message": "Status updated"}), 200
+
+@chatbot_blueprint.route('/api/files', methods=['GET'])
+def get_files():
+    files = QnAFile.query.order_by(QnAFile.last_update.desc()).all()
+    return jsonify([{
+        "id": str(f.id),
+        "name": f.name,
+        "lastUpdate": f.last_update.strftime("%I:%M %p %d/%m/%Y")
+    } for f in files])
+
+@chatbot_blueprint.route('/api/files', methods=['POST'])
+def add_file():
+    data = request.json
+    new_file = QnAFile(name=data.get('name'))
+    session.add(new_file)
+    session.commit()
+    return jsonify({"message": "File added"}), 201
+
+@chatbot_blueprint.route('/api/files/<int:id>', methods=['DELETE'])
+def delete_file(id):
+    file = QnAFile.query.get(id)
+    if file:
+        session.delete(file)
+        session.commit()
+    return jsonify({"message": "Deleted"}), 200
 
 @question_suggest_blueprint.route('/start', methods=['GET'])
 def start_questions():

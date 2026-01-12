@@ -1,10 +1,16 @@
-from sqlalchemy import Column, Integer, Text, String, ForeignKey, Boolean, UniqueConstraint, UUID
+from sqlalchemy import Column, Integer, Text, String, ForeignKey, Boolean, UniqueConstraint, UUID, DateTime
 from ..extensions import db
 import bcrypt
+from datetime import datetime
 
 class Chatbot(db.Model):
     id = Column(Integer, primary_key=True)
     name = Column(String(128), unique=True)
+    description = Column(Text, nullable=True)
+    publish_date = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_modified = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    status = Column(String(50), default='Active')
     sessions = db.relationship('ChatSession', backref='chatbot', lazy=True)
 
 class User(db.Model):
@@ -32,3 +38,8 @@ class ChatMessage(db.Model):
     like = Column(Integer, default=0)
     is_user_message = Column(Boolean, nullable=False)
     session_id = Column(Integer, ForeignKey('chat_session.id'), nullable=False)
+
+class QnAFile(db.Model):
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), nullable=False)
+    last_update = Column(DateTime, default=datetime.utcnow)
