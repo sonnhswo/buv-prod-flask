@@ -51,3 +51,4 @@ class QnAFile(db.Model):
     id = Column(Integer, primary_key=True)
     name = Column(String(255), nullable=False)
     last_update = Column(DateTime, default=datetime.utcnow)
+    chatbot_id = Column(Integer, ForeignKey('chatbot.id'), nullable=False)

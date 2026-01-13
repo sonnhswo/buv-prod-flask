@@ -250,30 +250,44 @@ def update_chatbot_status(id):
     session.commit()
     return jsonify({"message": "Status updated"}), 200
 
-@chatbot_blueprint.route('/api/files', methods=['GET'])
-def get_files():
-    files = QnAFile.query.order_by(QnAFile.last_update.desc()).all()
+@chatbot_blueprint.route('/api/chatbots/<string:id>/qna', methods=['GET'])
+def get_chatbot_qna_files(id):
+    db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    files = QnAFile.query.filter_by(chatbot_id=db_id).order_by(QnAFile.last_update.desc()).all()
     return jsonify([{
         "id": str(f.id),
         "name": f.name,
         "lastUpdate": f.last_update.strftime("%I:%M %p %d/%m/%Y")
     } for f in files])
 
-@chatbot_blueprint.route('/api/files', methods=['POST'])
-def add_file():
-    data = request.json
-    new_file = QnAFile(name=data.get('name'))
+@chatbot_blueprint.route('/api/chatbots/<string:id>/qna', methods=['POST'])
+def add_chatbot_qna_file(id):
+    db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+
+    # Simulate saving file (backend logic for XLSX processing would be here)
+    filename = secure_filename(file.filename)
+    new_file = QnAFile(name=filename, chatbot_id=db_id)
     session.add(new_file)
     session.commit()
     return jsonify({"message": "File added"}), 201
 
-@chatbot_blueprint.route('/api/files/<int:id>', methods=['DELETE'])
-def delete_file(id):
-    file = QnAFile.query.get(id)
+@chatbot_blueprint.route('/api/chatbots/<string:id>/qna/<int:file_id>', methods=['DELETE'])
+def delete_chatbot_qna_file(id, file_id):
+    file = QnAFile.query.get(file_id)
     if file:
         session.delete(file)
         session.commit()
     return jsonify({"message": "Deleted"}), 200
+
+@chatbot_blueprint.route('/api/chatbots/<string:id>/qna/<int:file_id>/download', methods=['GET'])
+def download_chatbot_qna_file(id, file_id):
+    # Mock download
+    return jsonify({"message": "File download simulation"}), 200
 
 @question_suggest_blueprint.route('/start', methods=['GET'])
 def start_questions():
