@@ -97,7 +97,7 @@ def get_new_session_id(chatbot_name):
                   type: integer
     """
     chatbot = Chatbot.query.filter_by(name=chatbot_name).first()
-    new_record = ChatSession(user_id="0", chatbot_id=chatbot.id)
+    new_record = ChatSession(user_id=None, chatbot_id=chatbot.id)
     session.add(new_record)
     session.commit()
     session_id = new_record.id
@@ -325,8 +325,6 @@ def start_questions():
     
     if not chatbot:
         return jsonify({'error': 'Chatbot not found'}), 404
-    
-    connection_string = chatbot.vector_db_connection_string
 
     results = [
         "How can I book an appointment with a tutor for academic support?",

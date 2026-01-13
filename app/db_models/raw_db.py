@@ -1,13 +1,20 @@
 from sqlalchemy import Column, Integer, Text, String, ForeignKey, Boolean, UniqueConstraint, UUID
 from sqlalchemy.dialects.postgresql import ARRAY as Array
 from ..extensions import db
+from enum import Enum as PyEnum
 
 # Add enum for user division
-class DivisionEnum(db.Enum):
+class Division(PyEnum):
+    STUDENT = "student"
     STAFF = "staff"
     FACULTY = "faculty"
-    ADMIN = "admin"
 
+DivisionEnum = db.Enum(
+    Division,
+    name="divisionenum",
+    values_callable=lambda enum_cls: [e.value for e in enum_cls],
+    create_type=False,
+)
 
 class Chatbot(db.Model):
     id = Column(Integer, primary_key=True)
@@ -17,14 +24,16 @@ class Chatbot(db.Model):
     attachments = Column(Array(String(256)))
     sessions = db.relationship('ChatSession', backref='chatbot', lazy=True)
     publish_date = Column(db.DateTime, default=db.func.now())
+    division = Column(DivisionEnum, default=Division.STUDENT.value)
     is_active = Column(Boolean, default=False)
     created_at = Column(db.DateTime, server_default=db.func.now())
     updated_at = Column(db.DateTime, server_default=db.func.now(), onupdate=db.func.now())
 
 class User(db.Model):
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, nullable=True)
     name = Column(String(128))
     password_hash = Column(String(256))
+    is_admin = Column(Boolean, default=True)
     division = Column(DivisionEnum)
     sessions = db.relationship('ChatSession', backref='user', lazy=True)
     created_at = Column(db.DateTime, server_default=db.func.now())

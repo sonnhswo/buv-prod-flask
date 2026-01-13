@@ -77,3 +77,9 @@ class Config:
     THUMB_UP_VALUE = 1
     THUMB_DOWN_VALUE = -1
     NO_THUMB_VALUE = 0
+
+    # CORS Configuration
+    # Allow CORS from these origins
+    CORS_ORIGINS = os.getenv('CORS_ORIGINS',
+        'http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173'
+    ).split(',')
