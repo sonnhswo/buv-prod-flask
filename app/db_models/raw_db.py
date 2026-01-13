@@ -12,6 +12,7 @@ class Chatbot(db.Model):
     last_modified = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     status = Column(String(50), default='Active')
     sessions = db.relationship('ChatSession', backref='chatbot', lazy=True)
+    files = db.relationship('ChatbotFile', backref='chatbot', lazy=True, cascade="all, delete-orphan")
 
 class User(db.Model):
     id = Column(Integer, primary_key=True)
@@ -38,6 +39,13 @@ class ChatMessage(db.Model):
     like = Column(Integer, default=0)
     is_user_message = Column(Boolean, nullable=False)
     session_id = Column(Integer, ForeignKey('chat_session.id'), nullable=False)
+
+class ChatbotFile(db.Model):
+    id = Column(Integer, primary_key=True)
+    filename = Column(String(255), nullable=False)
+    size = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    chatbot_id = Column(Integer, ForeignKey('chatbot.id'), nullable=False)
 
 class QnAFile(db.Model):
     id = Column(Integer, primary_key=True)

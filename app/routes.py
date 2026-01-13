@@ -3,9 +3,11 @@ from flask import Blueprint, request, jsonify
 from sqlalchemy import create_engine
 from datetime import datetime
 
+import os
+from werkzeug.utils import secure_filename
 from app.chatbot import clear_history
 from app.chatbot import generate_response
-from app.db_models.raw_db import ChatSession, Chatbot, ChatMessage, QnAFile
+from app.db_models.raw_db import ChatSession, Chatbot, ChatMessage, QnAFile, ChatbotFile
 from app.extensions import db
 from config import Config
 from .database import uni_dbs
@@ -166,6 +168,74 @@ def update_chatbot(id):
         val = data.get('schedulePublish')
         bot.publish_date = datetime.fromisoformat(val.replace('Z', '+00:00')) if val else None
     bot.status = 'Active' if data.get('status') == 'Active' or data.get('status') is True else 'Inactive'
+    session.commit()
+    return jsonify({"message": "Updated"}), 200
+
+@chatbot_blueprint.route('/api/chatbots/<string:id>/files', methods=['GET'])
+def get_chatbot_files(id):
+    db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    files = ChatbotFile.query.filter_by(chatbot_id=db_id).all()
+    return jsonify([{
+        "id": str(f.id),
+        "filename": f.filename,
+        "size": f.size,
+        "created_at": f.created_at.isoformat()
+    } for f in files])
+
+@chatbot_blueprint.route('/api/chatbots/<string:id>/files', methods=['POST'])
+def upload_chatbot_file(id):
+    db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    chatbot = Chatbot.query.get(db_id)
+    if not chatbot:
+        return jsonify({"error": "Chatbot not found"}), 404
+
+    if len(chatbot.files) >= 10:
+        return jsonify({"error": "Max 10 files allowed"}), 400
+
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+
+    file.seek(0, os.SEEK_END)
+    size = file.tell()
+    file.seek(0)
+
+    if size > 5 * 1024 * 1024:
+        return jsonify({"error": "File larger than 5MB"}), 400
+
+    filename = secure_filename(file.filename)
+    # In a real scenario, save to storage (blob/s3/local). 
+    # Here we just record metadata to simulate upload success.
+
+    new_file = ChatbotFile(filename=filename, size=size, chatbot_id=db_id)
+    session.add(new_file)
+    session.commit()
+
+    return jsonify({"id": str(new_file.id), "filename": filename}), 201
+
+@chatbot_blueprint.route('/api/chatbots/<string:id>/files/<int:file_id>', methods=['DELETE'])
+def delete_chatbot_file(id, file_id):
+    file = ChatbotFile.query.get(file_id)
+    if file:
+        session.delete(file)
+        session.commit()
+    return jsonify({"message": "Deleted"}), 200
+
+@chatbot_blueprint.route('/api/chatbots/<string:id>/files/<int:file_id>', methods=['PUT'])
+def replace_chatbot_file(id, file_id):
+    file_record = ChatbotFile.query.get(file_id)
+    if not file_record:
+        return jsonify({"error": "File not found"}), 404
+
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+
+    file = request.files['file']
+    file_record.filename = secure_filename(file.filename)
+    # Update logic for size/content would go here
     session.commit()
     return jsonify({"message": "Updated"}), 200
 
