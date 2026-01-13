@@ -162,8 +162,9 @@ def update_chatbot(id):
     data = request.json
     bot.name = data.get('name', bot.name)
     bot.description = data.get('description', bot.description)
-    if data.get('schedulePublish'):
-        bot.publish_date = datetime.fromisoformat(data.get('schedulePublish').replace('Z', '+00:00'))
+    if 'schedulePublish' in data:
+        val = data.get('schedulePublish')
+        bot.publish_date = datetime.fromisoformat(val.replace('Z', '+00:00')) if val else None
     bot.status = 'Active' if data.get('status') == 'Active' or data.get('status') is True else 'Inactive'
     session.commit()
     return jsonify({"message": "Updated"}), 200
