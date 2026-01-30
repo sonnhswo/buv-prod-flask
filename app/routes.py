@@ -1,13 +1,20 @@
 import uuid
 import json
-from flask import Blueprint, request, jsonify, Response, stream_with_context
+from flask import Blueprint, request, jsonify, Response, stream_with_context, redirect, send_file
 from sqlalchemy import create_engine
+from datetime import datetime, timedelta
+from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
+import pandas as pd
+from io import BytesIO
 
+import os
+from werkzeug.utils import secure_filename
 from app.chatbot import clear_history
 from app.chatbot import generate_response
-from app.db_models.raw_db import ChatSession, Chatbot, ChatMessage
+from app.db_models.raw_db import ChatSession, Chatbot, ChatMessage, Document
 from app.extensions import db
 from config import Config
+from app.auth import token_required
 from .database import uni_dbs
 
 config = Config()
@@ -17,6 +24,10 @@ session = db.session
 chatbot_blueprint = Blueprint('chatbot', __name__)
 question_suggest_blueprint = Blueprint('question_suggest', __name__)
 user_portal_blueprint = Blueprint('user_portal', __name__)
+
+# Azure Blob Storage Helper Functions
+blob_service_client = BlobServiceClient.from_connection_string(config.BLOB_CONN_STRING)
+container_name = config.BLOB_CONTAINER
 
 @chatbot_blueprint.route('/<string:chatbot_id>/new_session_id', methods=['GET'])
 def get_new_session_id(chatbot_id: str):
@@ -31,6 +42,34 @@ def get_new_session_id(chatbot_id: str):
     session.close()
     return jsonify({"message": "New chat session created successfully", "data": {"session_id": session_id}}), 200
 
+def upload_blob(file, blob_path):
+    try:
+        blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_path)
+        blob_client.upload_blob(file, overwrite=True)
+        return True
+    except Exception as e:
+        print(f"Error uploading blob: {e}")
+        return False
+
+def delete_blob(blob_path):
+    try:
+        blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_path)
+        if blob_client.exists():
+            blob_client.delete_blob()
+    except Exception as e:
+        print(f"Error deleting blob: {e}")
+
+def get_sas_url(blob_path):
+    sas_token = generate_blob_sas(
+        account_name=blob_service_client.account_name,
+        container_name=container_name,
+        blob_name=blob_path,
+        account_key=blob_service_client.credential.account_key,
+        permission=BlobSasPermissions(read=True),
+        expiry=datetime.utcnow() + timedelta(hours=1)
+    )
+    blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_path)
+    return f"{blob_client.url}?{sas_token}"
 
 @chatbot_blueprint.route('/clear_conversation', methods=['POST'])
 def clear_conversation():
@@ -196,6 +235,234 @@ def no_thumb(message_id: int):
     else:
         return jsonify({"error": "Message not found"}), 404 
 
+@chatbot_blueprint.route('/api/chatbots', methods=['GET'])
+@token_required
+def get_chatbots(current_user):
+    query = Chatbot.query
+    if current_user.division:
+        query = query.filter((Chatbot.division == current_user.division) | (Chatbot.division == None))
+
+    bots = query.order_by(Chatbot.created_at.desc()).all()
+    return jsonify([{
+        "id": f"CB{b.id:03d}",
+        "name": b.name,
+        "description": b.description or "",
+        "publishDate": b.publish_date.strftime("%d/%m/%Y") if b.publish_date else "",
+        "createdAt": b.created_at.strftime("%d/%m/%Y") if b.created_at else "",
+        "lastModified": b.updated_at.strftime("%I:%M %p %d/%m/%Y") if b.updated_at else "",
+        "status": "Active" if b.is_active else "Inactive"
+    } for b in bots])
+
+@chatbot_blueprint.route('/api/chatbots/<string:id>', methods=['GET'])
+def get_chatbot(id):
+    # Strip CB prefix if present
+    db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    b = Chatbot.query.get(db_id)
+    if not b:
+        return jsonify({"error": "Chatbot not found"}), 404
+    return jsonify({
+        "id": f"CB{b.id:03d}",
+        "name": b.name,
+        "description": b.description or "",
+        "publishDate": b.publish_date.strftime("%Y-%m-%dT%H:%M:%S.%fZ") if b.publish_date else "",
+        "createdAt": b.created_at.strftime("%d/%m/%Y") if b.created_at else "",
+        "lastModified": b.updated_at.strftime("%I:%M %p %d/%m/%Y") if b.updated_at else "",
+        "status": "Active" if b.is_active else "Inactive"
+    })
+
+@chatbot_blueprint.route('/api/chatbots', methods=['POST'])
+@token_required
+def create_chatbot(current_user):
+    data = request.json
+    new_bot = Chatbot(
+        name=data.get('name'),
+        description=data.get('description'),
+        publish_date=datetime.fromisoformat(data.get('schedulePublish').replace('Z', '+00:00')) if data.get('schedulePublish') else None,
+        is_active=True if data.get('status') == 'Active' else False,
+        division=current_user.division
+    )
+    session.add(new_bot)
+    session.commit()
+    return jsonify({"message": "Created", "id": f"CB{new_bot.id:03d}"}), 201
+
+@chatbot_blueprint.route('/api/chatbots/<string:id>', methods=['PUT'])
+def update_chatbot(id):
+    db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    bot = Chatbot.query.get(db_id)
+    if not bot:
+        return jsonify({"error": "Not found"}), 404
+    data = request.json
+    bot.name = data.get('name', bot.name)
+    bot.description = data.get('description', bot.description)
+    if 'schedulePublish' in data:
+        val = data.get('schedulePublish')
+        bot.publish_date = datetime.fromisoformat(val.replace('Z', '+00:00')) if val else None
+
+    if data.get('status'):
+        bot.is_active = True if data.get('status') == 'Active' else False
+
+    session.commit()
+    return jsonify({"message": "Updated"}), 200
+
+@chatbot_blueprint.route('/api/chatbots/<string:id>/files', methods=['GET'])
+def get_chatbot_files(id):
+    db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    # Adapted for uat_phase2 Document model (KNOWLEDGE_BASE)
+    files = Document.query.filter_by(chatbot_id=db_id, document_type='KNOWLEDGE_BASE').all()
+    return jsonify([{
+        "id": str(f.id),
+        "filename": f.name,
+        "size": f.file_size,
+        "created_at": f.created_at.isoformat() if f.created_at else ""
+    } for f in files])
+
+@chatbot_blueprint.route('/api/chatbots/<string:id>/files', methods=['POST'])
+def upload_chatbot_file(id):
+    db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    chatbot = Chatbot.query.get(db_id)
+    if not chatbot:
+        return jsonify({"error": "Chatbot not found"}), 404
+
+    # Count existing KNOWLEDGE_BASE documents
+    existing_count = Document.query.filter_by(chatbot_id=db_id, document_type='KNOWLEDGE_BASE').count()
+    if existing_count >= 10:
+        return jsonify({"error": "Max 10 files allowed"}), 400
+
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+
+    file.seek(0, os.SEEK_END)
+    size = file.tell()
+    file.seek(0)
+
+    if size > 5 * 1024 * 1024:
+        return jsonify({"error": "File larger than 5MB"}), 400
+
+    filename = secure_filename(file.filename)
+
+    blob_path = f"chatbots/{db_id}/files/{filename}"
+    upload_blob(file, blob_path)
+
+    # Adapt to Document model
+    new_file = Document(
+        name=filename, 
+        file_size=size, 
+        chatbot_id=db_id, 
+        document_type='KNOWLEDGE_BASE',
+        file_path=blob_path
+    )
+    session.add(new_file)
+    session.commit()
+
+    return jsonify({"id": str(new_file.id), "filename": filename}), 201
+
+@chatbot_blueprint.route('/api/chatbots/<string:id>/files/<int:file_id>', methods=['DELETE'])
+def delete_chatbot_file(id, file_id):
+    file = Document.query.get(file_id)
+    if file:
+        if file.file_path:
+            delete_blob(file.file_path)
+        session.delete(file)
+        session.commit()
+    return jsonify({"message": "Deleted"}), 200
+
+@chatbot_blueprint.route('/api/chatbots/<string:id>/files/<int:file_id>', methods=['PUT'])
+def replace_chatbot_file(id, file_id):
+    file_record = Document.query.get(file_id)
+    if not file_record:
+        return jsonify({"error": "File not found"}), 404
+
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+
+    file = request.files['file']
+    filename = secure_filename(file.filename)
+
+    if file_record.file_path:
+        delete_blob(file_record.file_path)
+
+    blob_path = f"chatbots/{int(id[2:]) if id.startswith('CB') else int(id)}/files/{filename}"
+    upload_blob(file, blob_path)
+
+    file_record.name = filename
+    file_record.file_path = blob_path
+    session.commit()
+    return jsonify({"message": "Updated"}), 200
+
+@chatbot_blueprint.route('/api/chatbots/<string:id>/files/<int:file_id>/download', methods=['GET'])
+def download_chatbot_file(id, file_id):
+    file = Document.query.get(file_id)
+    if file and file.file_path:
+        return redirect(get_sas_url(file.file_path))
+    return jsonify({"error": "File not found"}), 404
+
+@chatbot_blueprint.route('/api/chatbots/<string:id>/status', methods=['PATCH'])
+def update_chatbot_status(id):
+    db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    bot = Chatbot.query.get(db_id)
+    if not bot:
+        return jsonify({"error": "Not found"}), 404
+    data = request.json
+    # Adapted to uat_phase2 is_active field
+    bot.is_active = True if data.get('status') == 'Active' else False
+    if bot.is_active:
+        bot.publish_date = datetime.now()
+    else:
+        bot.publish_date = None
+    session.commit()
+    return jsonify({"message": "Status updated"}), 200
+
+@chatbot_blueprint.route('/api/chatbots/<string:id>/qna', methods=['GET'])
+def get_chatbot_qna_files(id):
+    db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    # Adapted for uat_phase2 Document model (QNA)
+    files = Document.query.filter_by(chatbot_id=db_id, document_type='QNA').order_by(Document.updated_at.desc()).all()
+    return jsonify([{
+        "id": str(f.id),
+        "name": f.name,
+        "lastUpdate": f.updated_at.strftime("%I:%M %p %d/%m/%Y") if f.updated_at else ""
+    } for f in files])
+
+@chatbot_blueprint.route('/api/chatbots/<string:id>/qna', methods=['POST'])
+def add_chatbot_qna_file(id):
+    db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+
+    filename = secure_filename(file.filename)
+    blob_path = f"chatbots/{db_id}/qna/{filename}"
+    upload_blob(file, blob_path)
+
+    # Adapt to Document model
+    new_file = Document(name=filename, chatbot_id=db_id, document_type='QNA', file_path=blob_path)
+    session.add(new_file)
+    session.commit()
+    return jsonify({"message": "File added"}), 201
+
+@chatbot_blueprint.route('/api/chatbots/<string:id>/qna/<int:file_id>', methods=['DELETE'])
+def delete_chatbot_qna_file(id, file_id):
+    file = Document.query.get(file_id)
+    if file:
+        if file.file_path:
+            delete_blob(file.file_path)
+        session.delete(file)
+        session.commit()
+    return jsonify({"message": "Deleted"}), 200
+
+@chatbot_blueprint.route('/api/chatbots/<string:id>/qna/<int:file_id>/download', methods=['GET'])
+def download_chatbot_qna_file(id, file_id):
+    file = Document.query.get(file_id)
+    if file and file.file_path:
+        return redirect(get_sas_url(file.file_path))
+    return jsonify({"error": "File not found"}), 404
+
 @question_suggest_blueprint.route('/start', methods=['GET'])
 def start_questions():
     awarding_body = request.args.get("awarding_body")
@@ -272,3 +539,78 @@ def get_chatbot_detail(chatbot_id):
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@chatbot_blueprint.route('/api/logs/export', methods=['GET'])
+@token_required
+def export_logs(current_user):
+    chatbot_id = request.args.get('chatbot_id')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+
+    try:
+        start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+        end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+    except Exception:
+        return jsonify({"error": "Invalid date format"}), 400
+
+    query = session.query(ChatMessage, ChatSession, Chatbot)\
+        .join(ChatSession, ChatMessage.session_id == ChatSession.id)\
+        .join(Chatbot, ChatSession.chatbot_id == Chatbot.id)\
+        .filter(ChatMessage.created_at >= start_dt)\
+        .filter(ChatMessage.created_at <= end_dt)
+
+    if current_user.division:
+        query = query.filter((Chatbot.division == current_user.division) | (Chatbot.division == None))
+
+    if chatbot_id and chatbot_id.lower() != 'all':
+        cid = int(chatbot_id[2:]) if chatbot_id.startswith("CB") else int(chatbot_id)
+        query = query.filter(Chatbot.id == cid)
+
+    query = query.order_by(ChatSession.id, ChatMessage.created_at)
+    messages = query.all()
+
+    rows = []
+    pending = None
+
+    for msg, sess, bot in messages:
+        if pending and pending['session_id'] != sess.id:
+            rows.append({
+                "Question": pending['msg'].message, "Answer": "", "Thumb up/thumb down": 0,
+                "Chatbot name": pending['bot_name'], "Timestamp": pending['msg'].created_at.strftime("%H:%M:%S %d-%m-%Y")
+            })
+            pending = None
+
+        if msg.is_user_message:
+            if pending:
+                rows.append({
+                    "Question": pending['msg'].message, "Answer": "", "Thumb up/thumb down": 0,
+                    "Chatbot name": pending['bot_name'], "Timestamp": pending['msg'].created_at.strftime("%H:%M:%S %d-%m-%Y")
+                })
+            pending = {'msg': msg, 'session_id': sess.id, 'bot_name': bot.name}
+        else:
+            if pending:
+                rows.append({
+                    "Question": pending['msg'].message, "Answer": msg.message, "Thumb up/thumb down": msg.like or 0,
+                    "Chatbot name": pending['bot_name'], "Timestamp": pending['msg'].created_at.strftime("%H:%M:%S %d-%m-%Y")
+                })
+                pending = None
+
+    if pending:
+        rows.append({
+            "Question": pending['msg'].message, "Answer": "", "Thumb up/thumb down": 0,
+            "Chatbot name": pending['bot_name'], "Timestamp": pending['msg'].created_at.strftime("%H:%M:%S %d-%m-%Y")
+        })
+
+    df = pd.DataFrame(rows)
+    columns = ['Question', 'Answer', 'Thumb up/thumb down', 'Timestamp']
+    if not chatbot_id or chatbot_id.lower() == 'all':
+        columns.insert(3, 'Chatbot name')
+
+    df = df[columns] if not df.empty else pd.DataFrame(columns=columns)
+
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False)
+    output.seek(0)
+
+    return send_file(output, download_name="chatlog.xlsx", as_attachment=True)

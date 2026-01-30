@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, Text, String, ForeignKey, Boolean, Uniqu
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from ..extensions import db
+import bcrypt
 
 
 class Admin(db.Model):
@@ -21,6 +22,12 @@ class Admin(db.Model):
     # Relationships
     chatbots = db.relationship('Chatbot', backref='owner', lazy=True, foreign_keys='Chatbot.owner_id')
     documents = db.relationship('Document', backref='owner', lazy=True, foreign_keys='Document.owner_id')
+    
+    def set_password(self, password):
+        self.password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+    def check_password(self, password):
+        return bcrypt.checkpw(password.encode('utf-8'), self.password_hash.encode('utf-8'))
 
 
 class User(db.Model):
@@ -38,6 +45,12 @@ class User(db.Model):
 
     # Relationships
     sessions = db.relationship('ChatSession', backref='user', lazy=True)
+
+    def set_password(self, password):
+        self.password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+    def check_password(self, password):
+        return bcrypt.checkpw(password.encode('utf-8'), self.password_hash.encode('utf-8'))
 
 
 class Chatbot(db.Model):

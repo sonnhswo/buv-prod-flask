@@ -4,7 +4,9 @@ from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv(".env"), override=True)
 
 class Config:
-    
+
+    SECRET_KEY = os.getenv('SECRET_KEY', 'dev_secret_key_change_in_prod')
+
     AZURE_OPENAI_API_KEY = os.getenv('AZURE_OPENAI_API_KEY')
     print(f"{AZURE_OPENAI_API_KEY = }")
     AZURE_OPENAI_ENDPOINT = os.getenv('AZURE_OPENAI_ENDPOINT')
