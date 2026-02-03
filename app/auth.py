@@ -23,18 +23,22 @@ def token_required(f):
             current_user = Admin.query.filter_by(id=data['id']).first()
         except Exception:
             return jsonify({'message': 'Token is invalid!'}), 401
-            
+
+        if current_user is None:
+            return jsonify({'message': 'Token is invalid!'}), 401
+
         return f(current_user, *args, **kwargs)
     return decorated
-
-# Hardcoded secret key for admin CRUD operations
-HARDCODED_SECRET_KEY = "hardcoded_secret_key_123"
 
 def secret_key_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
+        admin_secret_key = current_app.config.get('ADMIN_SECRET_KEY')
+        if not admin_secret_key:
+            return jsonify({'message': 'Server misconfiguration: ADMIN_SECRET_KEY is not set'}), 500
+
         key = request.headers.get('X-Secret-Key')
-        if not key or key != HARDCODED_SECRET_KEY:
+        if not key or key != admin_secret_key:
             return jsonify({'message': 'Unauthorized: Invalid Secret Key'}), 401
         return f(*args, **kwargs)
     return decorated
@@ -121,10 +125,10 @@ def login():
         return jsonify({'message': 'Could not verify'}), 401
         
     user = Admin.query.filter_by(email=data.get('email')).first()
-    
+
     if not user:
-        return jsonify({'message': 'User does not exist'}), 401
-        
+        return jsonify({'message': 'Invalid credentials'}), 401
+
     if user.check_password(data.get('password')):
         token = jwt.encode({
             'id': user.id,

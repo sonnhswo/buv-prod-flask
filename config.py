@@ -5,7 +5,13 @@ load_dotenv(find_dotenv(".env"), override=True)
 
 class Config:
 
-    SECRET_KEY = os.getenv('SECRET_KEY', 'dev_secret_key_change_in_prod')
+    SECRET_KEY = os.getenv('SECRET_KEY')
+    if not SECRET_KEY:
+        raise RuntimeError(
+            "SECRET_KEY environment variable is not set. "
+            "Set SECRET_KEY in your environment or .env file."
+        )
+    ADMIN_SECRET_KEY = os.getenv('ADMIN_SECRET_KEY')
 
     AZURE_OPENAI_API_KEY = os.getenv('AZURE_OPENAI_API_KEY')
     print(f"{AZURE_OPENAI_API_KEY = }")

@@ -3,7 +3,6 @@ from flask.cli import with_appcontext
 from app.db_models.raw_db import db, User, Chatbot, ChatSession, ChatMessage
 from datetime import datetime, timedelta
 import click
-import random
 
 @click.command("seed-messages")
 @with_appcontext

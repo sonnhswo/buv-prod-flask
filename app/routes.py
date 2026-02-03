@@ -240,7 +240,7 @@ def no_thumb(message_id: int):
 def get_chatbots(current_user):
     query = Chatbot.query
     if current_user.division:
-        query = query.filter((Chatbot.division == current_user.division) | (Chatbot.division == None))
+        query = query.filter((Chatbot.division == current_user.division) | (Chatbot.division.is_(None)))
 
     bots = query.order_by(Chatbot.created_at.desc()).all()
     return jsonify([{
@@ -286,7 +286,8 @@ def create_chatbot(current_user):
     return jsonify({"message": "Created", "id": f"CB{new_bot.id:03d}"}), 201
 
 @chatbot_blueprint.route('/api/chatbots/<string:id>', methods=['PUT'])
-def update_chatbot(id):
+@token_required
+def update_chatbot(current_user, id):
     db_id = int(id[2:]) if id.startswith("CB") else int(id)
     bot = Chatbot.query.get(db_id)
     if not bot:
@@ -317,7 +318,8 @@ def get_chatbot_files(id):
     } for f in files])
 
 @chatbot_blueprint.route('/api/chatbots/<string:id>/files', methods=['POST'])
-def upload_chatbot_file(id):
+@token_required
+def upload_chatbot_file(current_user, id):
     db_id = int(id[2:]) if id.startswith("CB") else int(id)
     chatbot = Chatbot.query.get(db_id)
     if not chatbot:
@@ -362,17 +364,20 @@ def upload_chatbot_file(id):
 
 @chatbot_blueprint.route('/api/chatbots/<string:id>/files/<int:file_id>', methods=['DELETE'])
 def delete_chatbot_file(id, file_id):
-    file = Document.query.get(file_id)
-    if file:
-        if file.file_path:
-            delete_blob(file.file_path)
-        session.delete(file)
-        session.commit()
+    db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    file = Document.query.filter_by(id=file_id, chatbot_id=db_id).first()
+    if not file:
+        return jsonify({"error": "File not found"}), 404
+    if file.file_path:
+        delete_blob(file.file_path)
+    session.delete(file)
+    session.commit()
     return jsonify({"message": "Deleted"}), 200
 
 @chatbot_blueprint.route('/api/chatbots/<string:id>/files/<int:file_id>', methods=['PUT'])
 def replace_chatbot_file(id, file_id):
-    file_record = Document.query.get(file_id)
+    db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    file_record = Document.query.filter_by(id=file_id, chatbot_id=db_id).first()
     if not file_record:
         return jsonify({"error": "File not found"}), 404
 
@@ -401,7 +406,8 @@ def download_chatbot_file(id, file_id):
     return jsonify({"error": "File not found"}), 404
 
 @chatbot_blueprint.route('/api/chatbots/<string:id>/status', methods=['PATCH'])
-def update_chatbot_status(id):
+@token_required
+def update_chatbot_status(current_user, id):
     db_id = int(id[2:]) if id.startswith("CB") else int(id)
     bot = Chatbot.query.get(db_id)
     if not bot:
@@ -428,7 +434,8 @@ def get_chatbot_qna_files(id):
     } for f in files])
 
 @chatbot_blueprint.route('/api/chatbots/<string:id>/qna', methods=['POST'])
-def add_chatbot_qna_file(id):
+@token_required
+def add_chatbot_qna_file(current_user, id):
     db_id = int(id[2:]) if id.startswith("CB") else int(id)
     if 'file' not in request.files:
         return jsonify({"error": "No file part"}), 400
@@ -448,17 +455,20 @@ def add_chatbot_qna_file(id):
 
 @chatbot_blueprint.route('/api/chatbots/<string:id>/qna/<int:file_id>', methods=['DELETE'])
 def delete_chatbot_qna_file(id, file_id):
-    file = Document.query.get(file_id)
-    if file:
-        if file.file_path:
-            delete_blob(file.file_path)
-        session.delete(file)
-        session.commit()
+    db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    file = Document.query.filter_by(id=file_id, chatbot_id=db_id, document_type='QNA').first()
+    if not file:
+        return jsonify({"error": "File not found"}), 404
+    if file.file_path:
+        delete_blob(file.file_path)
+    session.delete(file)
+    session.commit()
     return jsonify({"message": "Deleted"}), 200
 
 @chatbot_blueprint.route('/api/chatbots/<string:id>/qna/<int:file_id>/download', methods=['GET'])
 def download_chatbot_qna_file(id, file_id):
-    file = Document.query.get(file_id)
+    db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    file = Document.query.filter_by(id=file_id, chatbot_id=db_id, document_type='QNA').first()
     if file and file.file_path:
         return redirect(get_sas_url(file.file_path))
     return jsonify({"error": "File not found"}), 404
@@ -560,11 +570,14 @@ def export_logs(current_user):
         .filter(ChatMessage.created_at <= end_dt)
 
     if current_user.division:
-        query = query.filter((Chatbot.division == current_user.division) | (Chatbot.division == None))
+        query = query.filter((Chatbot.division == current_user.division) | (Chatbot.division.is_(None)))
 
     if chatbot_id and chatbot_id.lower() != 'all':
-        cid = int(chatbot_id[2:]) if chatbot_id.startswith("CB") else int(chatbot_id)
-        query = query.filter(Chatbot.id == cid)
+        try:
+            cid = int(chatbot_id[2:]) if chatbot_id.startswith("CB") else int(chatbot_id)
+            query = query.filter(Chatbot.id == cid)
+        except (TypeError, ValueError):
+            return jsonify({"error": "Invalid chatbot_id format"}), 400
 
     query = query.order_by(ChatSession.id, ChatMessage.created_at)
     messages = query.all()
