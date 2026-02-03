@@ -48,6 +48,7 @@ class Chatbot(db.Model):
     description = Column(Text, nullable=True)
     database_name = Column(String(255), nullable=True)
     attachments = Column(JSONB, nullable=True)
+    configuration = Column(JSONB, nullable=True)
     publish_date = Column(DateTime(timezone=True), nullable=True)
     division = Column(String(50), nullable=True)
     is_active = Column(Boolean, default=True, nullable=True)

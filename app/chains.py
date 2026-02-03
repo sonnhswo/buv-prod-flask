@@ -68,3 +68,41 @@ def conversational_chain(conversational_rag_chain, relevant_questions_chain, que
     output = extract_formatted_answer(response['answer'])
     output['relevant_questions'] = relevant_questions.questions
     return output
+
+
+def conversational_chain_stream(conversational_rag_chain, relevant_questions_chain, query: str, session_id: str, uni_name: str):
+    """Stream the conversational response"""
+    from app.utils import add_prefix_to_answer
+    
+    print(f"{query=}")
+    print(f"{session_id=}")
+    
+    # Get the full response first (LangChain streaming with structured output is complex)
+    response = conversational_rag_chain.invoke(
+        {"input": query},
+        config={
+            "configurable": {"session_id": session_id}
+        }
+    )
+    pprint.pprint(response)
+    
+    # Extract answer and metadata
+    output = extract_formatted_answer(response['answer'])
+    answer = add_prefix_to_answer(output['answer'], uni_name)
+    
+    # Stream the answer word by word
+    words = answer.split(' ')
+    for i, word in enumerate(words):
+        if i == 0:
+            yield {'type': 'content', 'content': word}
+        else:
+            yield {'type': 'content', 'content': ' ' + word}
+    
+    # Send metadata
+    yield {'type': 'metadata', 'source': output.get('source'), 'page_number': output.get('page_number')}
+    
+    # Get and send relevant questions
+    relevant_questions = relevant_questions_chain.invoke(str(response['context']))
+    yield {'type': 'questions', 'relevant_questions': relevant_questions.questions}
+    
+    yield {'type': 'done'}
