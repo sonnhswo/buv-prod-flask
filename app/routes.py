@@ -307,103 +307,113 @@ def update_chatbot(current_user, id):
 
 @chatbot_blueprint.route('/api/chatbots/<string:id>/files', methods=['GET'])
 def get_chatbot_files(id):
-    db_id = int(id[2:]) if id.startswith("CB") else int(id)
-    # Adapted for uat_phase2 Document model (KNOWLEDGE_BASE)
-    files = Document.query.filter_by(chatbot_id=db_id, document_type='KNOWLEDGE_BASE').all()
-    return jsonify([{
-        "id": str(f.id),
-        "filename": f.name,
-        "size": f.file_size,
-        "created_at": f.created_at.isoformat() if f.created_at else ""
-    } for f in files])
+    # TODO: Document table is still being updated in the database.
+    return jsonify([])
+    # db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    # # Adapted for uat_phase2 Document model (KNOWLEDGE_BASE)
+    # files = Document.query.filter_by(chatbot_id=db_id, document_type='KNOWLEDGE_BASE').all()
+    # return jsonify([{
+    #     "id": str(f.id),
+    #     "filename": f.name,
+    #     "size": f.file_size,
+    #     "created_at": f.created_at.isoformat() if f.created_at else ""
+    # } for f in files])
 
 @chatbot_blueprint.route('/api/chatbots/<string:id>/files', methods=['POST'])
 @token_required
 def upload_chatbot_file(current_user, id):
-    db_id = int(id[2:]) if id.startswith("CB") else int(id)
-    chatbot = Chatbot.query.get(db_id)
-    if not chatbot:
-        return jsonify({"error": "Chatbot not found"}), 404
-
-    # Count existing KNOWLEDGE_BASE documents
-    existing_count = Document.query.filter_by(chatbot_id=db_id, document_type='KNOWLEDGE_BASE').count()
-    if existing_count >= 10:
-        return jsonify({"error": "Max 10 files allowed"}), 400
-
-    if 'file' not in request.files:
-        return jsonify({"error": "No file part"}), 400
-
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
-
-    file.seek(0, os.SEEK_END)
-    size = file.tell()
-    file.seek(0)
-
-    if size > 5 * 1024 * 1024:
-        return jsonify({"error": "File larger than 5MB"}), 400
-
-    filename = secure_filename(file.filename)
-
-    blob_path = f"chatbots/{db_id}/files/{filename}"
-    upload_blob(file, blob_path)
-
-    # Adapt to Document model
-    new_file = Document(
-        name=filename, 
-        file_size=size, 
-        chatbot_id=db_id, 
-        document_type='KNOWLEDGE_BASE',
-        file_path=blob_path
-    )
-    session.add(new_file)
-    session.commit()
-
-    return jsonify({"id": str(new_file.id), "filename": filename}), 201
+    # TODO: Document table is still being updated in the database.
+    return jsonify({"error": "Feature unavailable"}), 503
+    # db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    # chatbot = Chatbot.query.get(db_id)
+    # if not chatbot:
+    #     return jsonify({"error": "Chatbot not found"}), 404
+    #
+    # # Count existing KNOWLEDGE_BASE documents
+    # existing_count = Document.query.filter_by(chatbot_id=db_id, document_type='KNOWLEDGE_BASE').count()
+    # if existing_count >= 10:
+    #     return jsonify({"error": "Max 10 files allowed"}), 400
+    #
+    # if 'file' not in request.files:
+    #     return jsonify({"error": "No file part"}), 400
+    #
+    # file = request.files['file']
+    # if file.filename == '':
+    #     return jsonify({"error": "No selected file"}), 400
+    #
+    # file.seek(0, os.SEEK_END)
+    # size = file.tell()
+    # file.seek(0)
+    #
+    # if size > 5 * 1024 * 1024:
+    #     return jsonify({"error": "File larger than 5MB"}), 400
+    #
+    # filename = secure_filename(file.filename)
+    #
+    # blob_path = f"chatbots/{db_id}/files/{filename}"
+    # upload_blob(file, blob_path)
+    #
+    # # Adapt to Document model
+    # new_file = Document(
+    #     name=filename, 
+    #     file_size=size, 
+    #     chatbot_id=db_id, 
+    #     document_type='KNOWLEDGE_BASE',
+    #     file_path=blob_path
+    # )
+    # session.add(new_file)
+    # session.commit()
+    #
+    # return jsonify({"id": str(new_file.id), "filename": filename}), 201
 
 @chatbot_blueprint.route('/api/chatbots/<string:id>/files/<int:file_id>', methods=['DELETE'])
 def delete_chatbot_file(id, file_id):
-    db_id = int(id[2:]) if id.startswith("CB") else int(id)
-    file = Document.query.filter_by(id=file_id, chatbot_id=db_id).first()
-    if not file:
-        return jsonify({"error": "File not found"}), 404
-    if file.file_path:
-        delete_blob(file.file_path)
-    session.delete(file)
-    session.commit()
-    return jsonify({"message": "Deleted"}), 200
+    # TODO: Document table is still being updated in the database.
+    return jsonify({"error": "Feature unavailable"}), 503
+    # db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    # file = Document.query.filter_by(id=file_id, chatbot_id=db_id).first()
+    # if not file:
+    #     return jsonify({"error": "File not found"}), 404
+    # if file.file_path:
+    #     delete_blob(file.file_path)
+    # session.delete(file)
+    # session.commit()
+    # return jsonify({"message": "Deleted"}), 200
 
 @chatbot_blueprint.route('/api/chatbots/<string:id>/files/<int:file_id>', methods=['PUT'])
 def replace_chatbot_file(id, file_id):
-    db_id = int(id[2:]) if id.startswith("CB") else int(id)
-    file_record = Document.query.filter_by(id=file_id, chatbot_id=db_id).first()
-    if not file_record:
-        return jsonify({"error": "File not found"}), 404
-
-    if 'file' not in request.files:
-        return jsonify({"error": "No file part"}), 400
-
-    file = request.files['file']
-    filename = secure_filename(file.filename)
-
-    if file_record.file_path:
-        delete_blob(file_record.file_path)
-
-    blob_path = f"chatbots/{int(id[2:]) if id.startswith('CB') else int(id)}/files/{filename}"
-    upload_blob(file, blob_path)
-
-    file_record.name = filename
-    file_record.file_path = blob_path
-    session.commit()
-    return jsonify({"message": "Updated"}), 200
+    # TODO: Document table is still being updated in the database.
+    return jsonify({"error": "Feature unavailable"}), 503
+    # db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    # file_record = Document.query.filter_by(id=file_id, chatbot_id=db_id).first()
+    # if not file_record:
+    #     return jsonify({"error": "File not found"}), 404
+    #
+    # if 'file' not in request.files:
+    #     return jsonify({"error": "No file part"}), 400
+    #
+    # file = request.files['file']
+    # filename = secure_filename(file.filename)
+    #
+    # if file_record.file_path:
+    #     delete_blob(file_record.file_path)
+    #
+    # blob_path = f"chatbots/{int(id[2:]) if id.startswith('CB') else int(id)}/files/{filename}"
+    # upload_blob(file, blob_path)
+    #
+    # file_record.name = filename
+    # file_record.file_path = blob_path
+    # session.commit()
+    # return jsonify({"message": "Updated"}), 200
 
 @chatbot_blueprint.route('/api/chatbots/<string:id>/files/<int:file_id>/download', methods=['GET'])
 def download_chatbot_file(id, file_id):
-    file = Document.query.get(file_id)
-    if file and file.file_path:
-        return redirect(get_sas_url(file.file_path))
-    return jsonify({"error": "File not found"}), 404
+    # TODO: Document table is still being updated in the database.
+    return jsonify({"error": "Feature unavailable"}), 404
+    # file = Document.query.get(file_id)
+    # if file and file.file_path:
+    #     return redirect(get_sas_url(file.file_path))
+    # return jsonify({"error": "File not found"}), 404
 
 @chatbot_blueprint.route('/api/chatbots/<string:id>/status', methods=['PATCH'])
 @token_required
@@ -424,54 +434,62 @@ def update_chatbot_status(current_user, id):
 
 @chatbot_blueprint.route('/api/chatbots/<string:id>/qna', methods=['GET'])
 def get_chatbot_qna_files(id):
-    db_id = int(id[2:]) if id.startswith("CB") else int(id)
-    # Adapted for uat_phase2 Document model (QNA)
-    files = Document.query.filter_by(chatbot_id=db_id, document_type='QNA').order_by(Document.updated_at.desc()).all()
-    return jsonify([{
-        "id": str(f.id),
-        "name": f.name,
-        "lastUpdate": f.updated_at.strftime("%I:%M %p %d/%m/%Y") if f.updated_at else ""
-    } for f in files])
+    # TODO: Document table is still being updated in the database.
+    return jsonify([])
+    # db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    # # Adapted for uat_phase2 Document model (QNA)
+    # files = Document.query.filter_by(chatbot_id=db_id, document_type='QNA').order_by(Document.updated_at.desc()).all()
+    # return jsonify([{
+    #     "id": str(f.id),
+    #     "name": f.name,
+    #     "lastUpdate": f.updated_at.strftime("%I:%M %p %d/%m/%Y") if f.updated_at else ""
+    # } for f in files])
 
 @chatbot_blueprint.route('/api/chatbots/<string:id>/qna', methods=['POST'])
 @token_required
 def add_chatbot_qna_file(current_user, id):
-    db_id = int(id[2:]) if id.startswith("CB") else int(id)
-    if 'file' not in request.files:
-        return jsonify({"error": "No file part"}), 400
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
-
-    filename = secure_filename(file.filename)
-    blob_path = f"chatbots/{db_id}/qna/{filename}"
-    upload_blob(file, blob_path)
-
-    # Adapt to Document model
-    new_file = Document(name=filename, chatbot_id=db_id, document_type='QNA', file_path=blob_path)
-    session.add(new_file)
-    session.commit()
-    return jsonify({"message": "File added"}), 201
+    # TODO: Document table is still being updated in the database.
+    return jsonify({"error": "Feature unavailable"}), 503
+    # db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    # if 'file' not in request.files:
+    #     return jsonify({"error": "No file part"}), 400
+    # file = request.files['file']
+    # if file.filename == '':
+    #     return jsonify({"error": "No selected file"}), 400
+    #
+    # filename = secure_filename(file.filename)
+    # blob_path = f"chatbots/{db_id}/qna/{filename}"
+    # upload_blob(file, blob_path)
+    #
+    # # Adapt to Document model
+    # new_file = Document(name=filename, chatbot_id=db_id, document_type='QNA', file_path=blob_path)
+    # session.add(new_file)
+    # session.commit()
+    # return jsonify({"message": "File added"}), 201
 
 @chatbot_blueprint.route('/api/chatbots/<string:id>/qna/<int:file_id>', methods=['DELETE'])
 def delete_chatbot_qna_file(id, file_id):
-    db_id = int(id[2:]) if id.startswith("CB") else int(id)
-    file = Document.query.filter_by(id=file_id, chatbot_id=db_id, document_type='QNA').first()
-    if not file:
-        return jsonify({"error": "File not found"}), 404
-    if file.file_path:
-        delete_blob(file.file_path)
-    session.delete(file)
-    session.commit()
-    return jsonify({"message": "Deleted"}), 200
+    # TODO: Document table is still being updated in the database.
+    return jsonify({"error": "Feature unavailable"}), 503
+    # db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    # file = Document.query.filter_by(id=file_id, chatbot_id=db_id, document_type='QNA').first()
+    # if not file:
+    #     return jsonify({"error": "File not found"}), 404
+    # if file.file_path:
+    #     delete_blob(file.file_path)
+    # session.delete(file)
+    # session.commit()
+    # return jsonify({"message": "Deleted"}), 200
 
 @chatbot_blueprint.route('/api/chatbots/<string:id>/qna/<int:file_id>/download', methods=['GET'])
 def download_chatbot_qna_file(id, file_id):
-    db_id = int(id[2:]) if id.startswith("CB") else int(id)
-    file = Document.query.filter_by(id=file_id, chatbot_id=db_id, document_type='QNA').first()
-    if file and file.file_path:
-        return redirect(get_sas_url(file.file_path))
-    return jsonify({"error": "File not found"}), 404
+    # TODO: Document table is still being updated in the database.
+    return jsonify({"error": "Feature unavailable"}), 404
+    # db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    # file = Document.query.filter_by(id=file_id, chatbot_id=db_id, document_type='QNA').first()
+    # if file and file.file_path:
+    #     return redirect(get_sas_url(file.file_path))
+    # return jsonify({"error": "File not found"}), 404
 
 @question_suggest_blueprint.route('/start', methods=['GET'])
 def start_questions():
