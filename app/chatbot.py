@@ -30,7 +30,6 @@ def clear_history(session_id: str):
 def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
     try:
         language_detection = language_detection_chain.invoke({"input": user_input})
-        print(f"{language_detection=}")
         if language_detection.strip().lower() == "vietnamese":
             answer = "We're sorry for any inconvenience; however, our chatbot can only answer questions in English. Unfortunately, Vietnamese isn't available at the moment. Thank you for your understanding!"
             source = None
@@ -44,9 +43,7 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
             conversational_rag_chain = create_conversational_rag_chain(doc_retriever, get_session_history)
             relevant_questions_chain = create_relevant_questions_chain(question_retriever)
 
-            print(f"Before trimming {store=}")
             trim_message_history(session_id)
-            print(f"After trimming {store=}")
             output = conversational_chain(conversational_rag_chain, relevant_questions_chain, user_input, session_id)
             
             answer = output.get("answer")
@@ -73,3 +70,43 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
         }
     except Exception as e:
         print(e)
+
+
+def generate_response_stream(user_input: str, session_id: str, uni_name: str):
+    """Generator function for streaming responses"""
+    try:
+        language_detection = language_detection_chain.invoke({"input": user_input})
+        print(f"{language_detection=}")
+        
+        if language_detection.strip().lower() == "vietnamese":
+            answer = "We're sorry for any inconvenience; however, our chatbot can only answer questions in English. Unfortunately, Vietnamese isn't available at the moment. Thank you for your understanding!"
+            yield {'type': 'content', 'content': answer}
+            yield {'type': 'metadata', 'source': None, 'page_number': None}
+            yield {'type': 'questions', 'relevant_questions': []}
+            yield {'type': 'done'}
+        else:
+            doc_retriever = doc_retrievers[uni_name]
+            question_retriever = question_retrievers[uni_name]
+            
+            conversational_rag_chain = create_conversational_rag_chain(doc_retriever, get_session_history)
+            relevant_questions_chain = create_relevant_questions_chain(question_retriever)
+
+            print(f"Before trimming {store=}")
+            trim_message_history(session_id)
+            print(f"After trimming {store=}")
+            
+            # Stream the answer
+            from app.chains import conversational_chain_stream
+            for chunk in conversational_chain_stream(conversational_rag_chain, relevant_questions_chain, user_input, session_id, uni_name):
+                yield chunk
+                
+    except (BadRequestError, ValueError) as e:
+        print(e)
+        standard_message = "For further assistance, please contact our Student Information Office via email at studentservice@buv.edu.vn or by phone at 0936 376 136."
+        yield {'type': 'content', 'content': add_prefix_to_answer(standard_message, uni_name)}
+        yield {'type': 'metadata', 'source': None, 'page_number': None}
+        yield {'type': 'questions', 'relevant_questions': []}
+        yield {'type': 'done'}
+    except Exception as e:
+        print(e)
+        yield {'type': 'error', 'error': str(e)}
