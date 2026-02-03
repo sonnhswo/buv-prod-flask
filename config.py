@@ -86,3 +86,9 @@ class Config:
     THUMB_UP_VALUE = 1
     THUMB_DOWN_VALUE = -1
     NO_THUMB_VALUE = 0
+    
+    # CORS Configuration
+    CORS_ORIGINS = os.getenv('CORS_ORIGINS', '*').split(',')
+    CORS_ALLOW_HEADERS = ['Content-Type', 'Authorization', 'X-Requested-With']
+    CORS_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+    CORS_SUPPORTS_CREDENTIALS = True
