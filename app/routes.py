@@ -20,7 +20,6 @@ user_portal_blueprint = Blueprint('user_portal', __name__)
 
 @chatbot_blueprint.route('/<string:chatbot_id>/new_session_id', methods=['GET'])
 def get_new_session_id(chatbot_id: str):
-    print(f"{chatbot_id=}")
     # Check if chatbot exists
     chatbot = Chatbot.query.get(chatbot_id)
     if not chatbot:
@@ -46,7 +45,6 @@ def chat(chatbot_id: int):
     data: dict = request.json
     user_input: str = data.get('message')
     session_id: int = data.get('session_id')
-    print(f"{user_input = }")
 
     if not user_input:
         return jsonify({"error": "No message provided"}), 400
@@ -78,7 +76,6 @@ def chat(chatbot_id: int):
     
     if ask_relevant_question:
         response = generate_response(user_input, str(session_id), full_name)
-        # print(f"{response=}")
         
     new_human_message = ChatMessage(message=user_input, is_user_message=True, session_id=session_id)
     new_ai_message = ChatMessage(message=response["answer"], is_user_message=False, session_id=session_id)
@@ -95,7 +92,6 @@ def chat_stream(chatbot_id: int):
     data: dict = request.json
     user_input: str = data.get('message')
     session_id: int = data.get('session_id')
-    print(f"{user_input = }")
 
     if not user_input:
         return jsonify({"error": "No message provided"}), 400
@@ -250,8 +246,6 @@ def get_chatbot_detail(chatbot_id):
     """Get detailed information about a specific chatbot"""
     try:
         chatbot = Chatbot.query.get(chatbot_id)
-
-        print(f"{chatbot=}")
         
         if not chatbot:
             return jsonify({'error': 'Chatbot not found'}), 404

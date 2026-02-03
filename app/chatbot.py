@@ -30,7 +30,6 @@ def clear_history(session_id: str):
 def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
     try:
         language_detection = language_detection_chain.invoke({"input": user_input})
-        print(f"{language_detection=}")
         if language_detection.strip().lower() == "vietnamese":
             answer = "We're sorry for any inconvenience; however, our chatbot can only answer questions in English. Unfortunately, Vietnamese isn't available at the moment. Thank you for your understanding!"
             source = None
@@ -44,9 +43,7 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
             conversational_rag_chain = create_conversational_rag_chain(doc_retriever, get_session_history)
             relevant_questions_chain = create_relevant_questions_chain(question_retriever)
 
-            print(f"Before trimming {store=}")
             trim_message_history(session_id)
-            print(f"After trimming {store=}")
             output = conversational_chain(conversational_rag_chain, relevant_questions_chain, user_input, session_id)
             
             answer = output.get("answer")

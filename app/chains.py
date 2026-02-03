@@ -74,8 +74,6 @@ def conversational_chain_stream(conversational_rag_chain, relevant_questions_cha
     """Stream the conversational response"""
     from app.utils import add_prefix_to_answer
     
-    print(f"{query=}")
-    print(f"{session_id=}")
     
     # Get the full response first (LangChain streaming with structured output is complex)
     response = conversational_rag_chain.invoke(
@@ -84,7 +82,6 @@ def conversational_chain_stream(conversational_rag_chain, relevant_questions_cha
             "configurable": {"session_id": session_id}
         }
     )
-    pprint.pprint(response)
     
     # Extract answer and metadata
     output = extract_formatted_answer(response['answer'])
