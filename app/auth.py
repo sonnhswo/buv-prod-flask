@@ -47,6 +47,8 @@ def secret_key_required(f):
 @secret_key_required
 def create_user():
     data = request.get_json()
+    if data is None:
+        return jsonify({'message': 'Invalid JSON or empty body'}), 400
     username = data.get('username')
     password = data.get('password')
     division = data.get('division')
@@ -85,6 +87,8 @@ def list_users():
 @secret_key_required
 def update_user_password():
     data = request.get_json()
+    if data is None:
+        return jsonify({'message': 'Invalid JSON or empty body'}), 400
     username = data.get('username')
     new_password = data.get('password')
 
@@ -104,6 +108,8 @@ def update_user_password():
 @secret_key_required
 def delete_user():
     data = request.get_json()
+    if data is None:
+        return jsonify({'message': 'Invalid JSON or empty body'}), 400
     username = data.get('username')
 
     if not username:

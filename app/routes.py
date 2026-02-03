@@ -7,11 +7,9 @@ from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPerm
 import pandas as pd
 from io import BytesIO
 
-import os
-from werkzeug.utils import secure_filename
 from app.chatbot import clear_history
 from app.chatbot import generate_response
-from app.db_models.raw_db import ChatSession, Chatbot, ChatMessage, Document
+from app.db_models.raw_db import ChatSession, Chatbot, ChatMessage
 from app.extensions import db
 from config import Config
 from app.auth import token_required
@@ -26,7 +24,12 @@ question_suggest_blueprint = Blueprint('question_suggest', __name__)
 user_portal_blueprint = Blueprint('user_portal', __name__)
 
 # Azure Blob Storage Helper Functions
-blob_service_client = BlobServiceClient.from_connection_string(config.BLOB_CONN_STRING)
+blob_service_client = None
+if config.BLOB_CONN_STRING:
+    try:
+        blob_service_client = BlobServiceClient.from_connection_string(config.BLOB_CONN_STRING)
+    except Exception as e:
+        print(f"Failed to initialize BlobServiceClient: {e}")
 container_name = config.BLOB_CONTAINER
 
 @chatbot_blueprint.route('/<string:chatbot_id>/new_session_id', methods=['GET'])
@@ -256,7 +259,10 @@ def get_chatbots(current_user):
 @chatbot_blueprint.route('/api/chatbots/<string:id>', methods=['GET'])
 def get_chatbot(id):
     # Strip CB prefix if present
-    db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    try:
+        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    except ValueError:
+        return jsonify({"error": "Invalid chatbot identifier"}), 400
     b = Chatbot.query.get(db_id)
     if not b:
         return jsonify({"error": "Chatbot not found"}), 404
@@ -274,10 +280,15 @@ def get_chatbot(id):
 @token_required
 def create_chatbot(current_user):
     data = request.json
+    try:
+        publish_date = datetime.fromisoformat(data.get('schedulePublish').replace('Z', '+00:00')) if data.get('schedulePublish') else None
+    except ValueError:
+        return jsonify({"error": "Invalid date format"}), 400
+
     new_bot = Chatbot(
         name=data.get('name'),
         description=data.get('description'),
-        publish_date=datetime.fromisoformat(data.get('schedulePublish').replace('Z', '+00:00')) if data.get('schedulePublish') else None,
+        publish_date=publish_date,
         is_active=True if data.get('status') == 'Active' else False,
         division=current_user.division
     )
@@ -288,7 +299,10 @@ def create_chatbot(current_user):
 @chatbot_blueprint.route('/api/chatbots/<string:id>', methods=['PUT'])
 @token_required
 def update_chatbot(current_user, id):
-    db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    try:
+        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    except ValueError:
+        return jsonify({"error": "Invalid chatbot identifier"}), 400
     bot = Chatbot.query.get(db_id)
     if not bot:
         return jsonify({"error": "Not found"}), 404
@@ -297,7 +311,10 @@ def update_chatbot(current_user, id):
     bot.description = data.get('description', bot.description)
     if 'schedulePublish' in data:
         val = data.get('schedulePublish')
-        bot.publish_date = datetime.fromisoformat(val.replace('Z', '+00:00')) if val else None
+        try:
+            bot.publish_date = datetime.fromisoformat(val.replace('Z', '+00:00')) if val else None
+        except ValueError:
+            return jsonify({"error": "Invalid date format"}), 400
 
     if data.get('status'):
         bot.is_active = True if data.get('status') == 'Active' else False
@@ -418,7 +435,10 @@ def download_chatbot_file(id, file_id):
 @chatbot_blueprint.route('/api/chatbots/<string:id>/status', methods=['PATCH'])
 @token_required
 def update_chatbot_status(current_user, id):
-    db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    try:
+        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    except ValueError:
+        return jsonify({"error": "Invalid chatbot id"}), 400
     bot = Chatbot.query.get(db_id)
     if not bot:
         return jsonify({"error": "Not found"}), 404
