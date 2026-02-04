@@ -138,9 +138,9 @@ def login():
     if user.check_password(data.get('password')):
         token = jwt.encode({
             'id': user.id,
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+            'exp': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=current_app.config.get('JWT_EXPIRATION_HOURS', 24))
         }, current_app.config['SECRET_KEY'], algorithm="HS256")
-        
+
         return jsonify({
             'token': token,
             'user': {

@@ -2,7 +2,7 @@ import uuid
 import json
 from flask import Blueprint, request, jsonify, Response, stream_with_context, redirect, send_file
 from sqlalchemy import create_engine
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
 import pandas as pd
 from io import BytesIO
@@ -46,6 +46,8 @@ def get_new_session_id(chatbot_id: str):
     return jsonify({"message": "New chat session created successfully", "data": {"session_id": session_id}}), 200
 
 def upload_blob(file, blob_path):
+    if blob_service_client is None:
+        return False
     try:
         blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_path)
         blob_client.upload_blob(file, overwrite=True)
@@ -55,6 +57,8 @@ def upload_blob(file, blob_path):
         return False
 
 def delete_blob(blob_path):
+    if blob_service_client is None:
+        return
     try:
         blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_path)
         if blob_client.exists():
@@ -63,13 +67,15 @@ def delete_blob(blob_path):
         print(f"Error deleting blob: {e}")
 
 def get_sas_url(blob_path):
+    if blob_service_client is None:
+        return None
     sas_token = generate_blob_sas(
         account_name=blob_service_client.account_name,
         container_name=container_name,
         blob_name=blob_path,
         account_key=blob_service_client.credential.account_key,
         permission=BlobSasPermissions(read=True),
-        expiry=datetime.utcnow() + timedelta(hours=1)
+        expiry=datetime.now(timezone.utc) + timedelta(hours=1)
     )
     blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_path)
     return f"{blob_client.url}?{sas_token}"
