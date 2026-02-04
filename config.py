@@ -54,6 +54,7 @@ class Config:
     print(f"{BUS_SCHEDULE_FILE = }")
     STARTING_TIME_FILE = os.getenv('STARTING_TIME_FILE') # Handle Bus Schedule cases
     print(f"{STARTING_TIME_FILE = }")
+    JWT_SECRET = os.getenv('JWT_SECRET')
 
     SQLALCHEMY_DATABASE_URI = f'postgresql://{PG_VECTOR_USER}:{PG_VECTOR_PASSWORD}@{PG_VECTOR_HOST}/{PGDATABASE6}'
     # configs for each awarding bodies

@@ -146,6 +146,7 @@ prompt_toolkit==3.0.47
 protobuf==4.25.4
 psutil==6.0.0
 psycopg==3.2.1
+PyJWT==2.8.0
 psycopg2-binary
 psycopg-binary==3.2.1
 psycopg-pool==3.2.3

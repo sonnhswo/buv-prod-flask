@@ -1,11 +1,13 @@
 import uuid
 import json
+import jwt
+from functools import wraps
 from flask import Blueprint, request, jsonify, Response, stream_with_context
 from sqlalchemy import create_engine
-
+from datetime import datetime
 from app.chatbot import clear_history
 from app.chatbot import generate_response
-from app.db_models.raw_db import ChatSession, Chatbot, ChatMessage
+from app.db_models.raw_db import ChatSession, Chatbot, ChatMessage, Admin
 from app.extensions import db
 from config import Config
 from .database import uni_dbs
@@ -17,6 +19,30 @@ session = db.session
 chatbot_blueprint = Blueprint('chatbot', __name__)
 question_suggest_blueprint = Blueprint('question_suggest', __name__)
 user_portal_blueprint = Blueprint('user_portal', __name__)
+admin_portal_blueprint = Blueprint('admin_portal', __name__)
+
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        if 'Authorization' in request.headers:
+            auth_header = request.headers['Authorization']
+            if auth_header.startswith("Bearer "):
+                token = auth_header.split(" ")[1]
+
+        if not token:
+            return jsonify({'message': 'Token is missing!'}), 401
+
+        try:
+            data = jwt.decode(token, config.JWT_SECRET, algorithms=["HS256"])
+            current_user = Admin.query.get(data['userId'])
+            if not current_user:
+                return jsonify({'message': 'User not found!'}), 401
+        except Exception as e:
+            return jsonify({'message': 'Token is invalid!', 'error': str(e)}), 401
+
+        return f(current_user, *args, **kwargs)
+    return decorated
 
 @chatbot_blueprint.route('/<string:chatbot_id>/new_session_id', methods=['GET'])
 def get_new_session_id(chatbot_id: str):
@@ -272,3 +298,109 @@ def get_chatbot_detail(chatbot_id):
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
+# Admin Portal Endpoints
+
+@admin_portal_blueprint.route('/chatbots', methods=['GET'])
+@token_required
+def get_chatbots(current_user):
+    query = Chatbot.query
+    if current_user.division:
+        query = query.filter((Chatbot.division == current_user.division) | (Chatbot.division.is_(None)))
+
+    bots = query.order_by(Chatbot.created_at.desc()).all()
+    return jsonify([{
+        "id": f"CB{b.id:03d}",
+        "name": b.name,
+        "description": b.description or "",
+        "publishDate": b.publish_date.strftime("%d/%m/%Y") if b.publish_date else "",
+        "createdAt": b.created_at.strftime("%d/%m/%Y") if b.created_at else "",
+        "lastModified": b.updated_at.strftime("%I:%M %p %d/%m/%Y") if b.updated_at else "",
+        "status": "Active" if b.is_active else "Inactive"
+    } for b in bots])
+
+@admin_portal_blueprint.route('/chatbots/<string:id>', methods=['GET'])
+@token_required
+def get_admin_chatbot(current_user, id):
+    try:
+        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    except ValueError:
+        return jsonify({"error": "Invalid chatbot identifier"}), 400
+    b = Chatbot.query.get(db_id)
+    if not b:
+        return jsonify({"error": "Chatbot not found"}), 404
+    return jsonify({
+        "id": f"CB{b.id:03d}",
+        "name": b.name,
+        "description": b.description or "",
+        "publishDate": b.publish_date.strftime("%Y-%m-%dT%H:%M:%S.%fZ") if b.publish_date else "",
+        "createdAt": b.created_at.strftime("%d/%m/%Y") if b.created_at else "",
+        "lastModified": b.updated_at.strftime("%I:%M %p %d/%m/%Y") if b.updated_at else "",
+        "status": "Active" if b.is_active else "Inactive"
+    })
+
+@admin_portal_blueprint.route('/chatbots', methods=['POST'])
+@token_required
+def create_chatbot(current_user):
+    data = request.json
+    try:
+        publish_date = datetime.fromisoformat(data.get('schedulePublish').replace('Z', '+00:00')) if data.get('schedulePublish') else None
+    except ValueError:
+        return jsonify({"error": "Invalid date format"}), 400
+
+    new_bot = Chatbot(
+        name=data.get('name'),
+        description=data.get('description'),
+        publish_date=publish_date,
+        is_active=True if data.get('status') == 'Active' else False,
+        division=current_user.division
+    )
+    session.add(new_bot)
+    session.commit()
+    return jsonify({"message": "Created", "id": f"CB{new_bot.id:03d}"}), 201
+
+@admin_portal_blueprint.route('/chatbots/<string:id>', methods=['PUT'])
+@token_required
+def update_chatbot(current_user, id):
+    try:
+        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    except ValueError:
+        return jsonify({"error": "Invalid chatbot identifier"}), 400
+    bot = Chatbot.query.get(db_id)
+    if not bot:
+        return jsonify({"error": "Not found"}), 404
+    data = request.json
+    bot.name = data.get('name', bot.name)
+    bot.description = data.get('description', bot.description)
+    if 'schedulePublish' in data:
+        val = data.get('schedulePublish')
+        try:
+            bot.publish_date = datetime.fromisoformat(val.replace('Z', '+00:00')) if val else None
+        except ValueError:
+            return jsonify({"error": "Invalid date format"}), 400
+
+    if data.get('status'):
+        bot.is_active = True if data.get('status') == 'Active' else False
+
+    session.commit()
+    return jsonify({"message": "Updated"}), 200
+
+@admin_portal_blueprint.route('/chatbots/<string:id>/status', methods=['PATCH'])
+@token_required
+def update_chatbot_status(current_user, id):
+    try:
+        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    except ValueError:
+        return jsonify({"error": "Invalid chatbot id"}), 400
+    bot = Chatbot.query.get(db_id)
+    if not bot:
+        return jsonify({"error": "Not found"}), 404
+    data = request.json
+    # Adapted to uat_phase2 is_active field
+    bot.is_active = True if data.get('status') == 'Active' else False
+    if bot.is_active:
+        bot.publish_date = datetime.now()
+    else:
+        bot.publish_date = None
+    session.commit()
+    return jsonify({"message": "Status updated"}), 200
