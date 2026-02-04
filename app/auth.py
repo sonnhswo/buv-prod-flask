@@ -58,10 +58,6 @@ def create_user():
     
     if not division:
         return jsonify({'message': 'Division is required'}), 400
-    
-    # Check if division is only 'teacher' or 'student'
-    if division not in ['teacher', 'student']:
-        return jsonify({'message': 'Invalid division'}), 400
 
     if Admin.query.filter_by(email=username).first():
         return jsonify({'message': 'Username already exists'}), 409
