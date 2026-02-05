@@ -1,6 +1,6 @@
 from flask import Flask
 
-from app.routes import chatbot_blueprint, question_suggest_blueprint, user_portal_blueprint
+from app.routes import chatbot_blueprint, question_suggest_blueprint, user_portal_blueprint, admin_portal_blueprint
 from app.extensions import db, migrate, cors
 from app.commands import seed_chatbots, seed_users
 from config import Config
@@ -29,6 +29,7 @@ def create_app():
     app.register_blueprint(chatbot_blueprint)
     app.register_blueprint(question_suggest_blueprint, url_prefix="/question_suggest")
     app.register_blueprint(user_portal_blueprint, url_prefix="/user")
+    app.register_blueprint(admin_portal_blueprint, url_prefix="/admin")
 
     from .db_models import raw_db
     return app
