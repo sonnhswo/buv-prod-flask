@@ -108,6 +108,6 @@ class ChatMessage(db.Model):
     like = Column(Integer, default=0, nullable=True)
     is_user_message = Column(Boolean, nullable=False)
     session_id = Column(Integer, ForeignKey('chat_session.id'), nullable=False)
-    referenced_document_id = Column(Integer, ForeignKey('document.id'), nullable=True)
+    source = Column(JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=True)
