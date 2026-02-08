@@ -34,7 +34,8 @@ def token_required(f):
             return jsonify({'message': 'Token is missing!'}), 401
 
         try:
-            data = jwt.decode(token, config.JWT_SECRET, algorithms=["HS256"])
+            # Add 60 seconds of leeway to account for clock skew between Auth server and API server
+            data = jwt.decode(token, config.JWT_SECRET, algorithms=["HS256"], leeway=60)
             current_user = Admin.query.get(data['userId'])
             if not current_user:
                 return jsonify({'message': 'User not found!'}), 401
