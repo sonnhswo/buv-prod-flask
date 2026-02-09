@@ -83,9 +83,6 @@ class Document(db.Model):
         UniqueConstraint('chatbot_id', 'name', name='uq_document_chatbot_name'),
     )
 
-    # Relationships
-    referenced_messages = db.relationship('ChatMessage', backref='referenced_document', lazy=True)
-
 
 class ChatSession(db.Model):
     __tablename__ = 'chat_session'
