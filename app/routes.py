@@ -467,10 +467,6 @@ def upload_chatbot_file(current_user, id):
     if not chatbot:
         return jsonify({"error": "Chatbot not found"}), 404
 
-    existing_count = Document.query.filter_by(chatbot_id=db_id, document_type='KNOWLEDGE_BASE').count()
-    if existing_count >= 10:
-        return jsonify({"error": "Max 10 files allowed"}), 400
-
     if 'file' not in request.files:
         return jsonify({"error": "No file part"}), 400
 
@@ -481,9 +477,6 @@ def upload_chatbot_file(current_user, id):
     file.seek(0, os.SEEK_END)
     size = file.tell()
     file.seek(0)
-
-    if size > 5 * 1024 * 1024:
-        return jsonify({"error": "File larger than 5MB"}), 400
 
     filename = secure_filename(file.filename)
     blob_path = f"chatbots/{db_id}/files/{filename}"
@@ -544,9 +537,6 @@ def replace_chatbot_file(current_user, id, file_id):
     file.seek(0, os.SEEK_END)
     size = file.tell()
     file.seek(0)
-
-    if size > 5 * 1024 * 1024:
-        return jsonify({"error": "File larger than 5MB"}), 400
 
     filename = secure_filename(file.filename)
 
