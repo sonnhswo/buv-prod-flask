@@ -1,16 +1,20 @@
 import uuid
 import json
-import jwt
-from functools import wraps
-from flask import Blueprint, request, jsonify, Response, stream_with_context
+import os
+from werkzeug.utils import secure_filename
+from flask import Blueprint, request, jsonify, Response, stream_with_context, redirect, send_file
 from sqlalchemy import create_engine
 from datetime import datetime
+import pandas as pd
+from io import BytesIO
 from app.chatbot import clear_history
 from app.chatbot import generate_response
-from app.db_models.raw_db import ChatSession, Chatbot, ChatMessage, Admin
+from app.db_models.raw_db import ChatSession, Chatbot, ChatMessage, Document
 from app.extensions import db
 from config import Config
 from .database import uni_dbs
+from app.storage import upload_blob, delete_blob, get_sas_url
+from app.decorators import token_required
 
 config = Config()
 # Create a session
@@ -20,29 +24,6 @@ chatbot_blueprint = Blueprint('chatbot', __name__)
 question_suggest_blueprint = Blueprint('question_suggest', __name__)
 user_portal_blueprint = Blueprint('user_portal', __name__)
 admin_portal_blueprint = Blueprint('admin_portal', __name__)
-
-def token_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        token = None
-        if 'Authorization' in request.headers:
-            auth_header = request.headers['Authorization']
-            if auth_header.startswith("Bearer "):
-                token = auth_header.split(" ")[1]
-
-        if not token:
-            return jsonify({'message': 'Token is missing!'}), 401
-
-        try:
-            data = jwt.decode(token, config.JWT_SECRET, algorithms=["HS256"])
-            current_user = Admin.query.get(data['userId'])
-            if not current_user:
-                return jsonify({'message': 'User not found!'}), 401
-        except Exception as e:
-            return jsonify({'message': 'Token is invalid!', 'error': str(e)}), 401
-
-        return f(current_user, *args, **kwargs)
-    return decorated
 
 @chatbot_blueprint.route('/<string:chatbot_id>/new_session_id', methods=['GET'])
 def get_new_session_id(chatbot_id: str):
@@ -385,6 +366,207 @@ def update_chatbot(current_user, id):
     session.commit()
     return jsonify({"message": "Updated"}), 200
 
+@admin_portal_blueprint.route('/chatbots/<string:id>/files', methods=['GET'])
+@token_required
+def get_chatbot_files(current_user, id):
+    try:
+        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    except ValueError:
+        return jsonify({"error": "Invalid chatbot identifier"}), 400
+
+    files = Document.query.filter_by(chatbot_id=db_id, document_type='KNOWLEDGE_BASE').all()
+    return jsonify([{
+        "id": str(f.id),
+        "filename": f.name,
+        "size": f.file_size,
+        "created_at": f.created_at.isoformat() if f.created_at else ""
+    } for f in files])
+
+@admin_portal_blueprint.route('/chatbots/<string:id>/files', methods=['POST'])
+@token_required
+def upload_chatbot_file(current_user, id):
+    try:
+        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    except ValueError:
+        return jsonify({"error": "Invalid chatbot identifier"}), 400
+
+    chatbot = Chatbot.query.get(db_id)
+    if not chatbot:
+        return jsonify({"error": "Chatbot not found"}), 404
+
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+
+    file.seek(0, os.SEEK_END)
+    size = file.tell()
+    file.seek(0)
+
+    filename = secure_filename(file.filename)
+    blob_path = f"chatbots/{db_id}/files/{filename}"
+
+    if upload_blob(file, blob_path):
+        new_file = Document(
+            name=filename, 
+            file_size=size, 
+            chatbot_id=db_id, 
+            document_type='KNOWLEDGE_BASE',
+            file_path=blob_path,
+            owner_id=current_user.id
+        )
+        session.add(new_file)
+        session.commit()
+        return jsonify({"id": str(new_file.id), "filename": filename, "size": size, "created_at": new_file.created_at.isoformat()}), 201
+    else:
+        return jsonify({"error": "Failed to upload to storage"}), 500
+
+@admin_portal_blueprint.route('/chatbots/<string:id>/files/<int:file_id>', methods=['DELETE'])
+@token_required
+def delete_chatbot_file(current_user, id, file_id):
+    try:
+        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    except ValueError:
+        return jsonify({"error": "Invalid chatbot identifier"}), 400
+
+    file = Document.query.filter_by(id=file_id, chatbot_id=db_id).first()
+    if not file:
+        return jsonify({"error": "File not found"}), 404
+
+    if file.file_path:
+        delete_blob(file.file_path)
+
+    session.delete(file)
+    session.commit()
+    return jsonify({"message": "Deleted"}), 200
+
+@admin_portal_blueprint.route('/chatbots/<string:id>/files/<int:file_id>', methods=['PUT'])
+@token_required
+def replace_chatbot_file(current_user, id, file_id):
+    try:
+        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    except ValueError:
+        return jsonify({"error": "Invalid chatbot identifier"}), 400
+
+    file_record = Document.query.filter_by(id=file_id, chatbot_id=db_id).first()
+    if not file_record:
+        return jsonify({"error": "File not found"}), 404
+
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+
+    file.seek(0, os.SEEK_END)
+    size = file.tell()
+    file.seek(0)
+
+    filename = secure_filename(file.filename)
+
+    if file_record.file_path:
+        delete_blob(file_record.file_path)
+
+    blob_path = f"chatbots/{db_id}/files/{filename}"
+    if upload_blob(file, blob_path):
+        file_record.name = filename
+        file_record.file_path = blob_path
+        file_record.file_size = size
+        file_record.owner_id = current_user.id
+        session.commit()
+        return jsonify({"id": str(file_record.id), "filename": filename, "size": size, "created_at": file_record.created_at.isoformat()}), 200
+    else:
+        return jsonify({"error": "Failed to upload to storage"}), 500
+
+@admin_portal_blueprint.route('/chatbots/<string:id>/files/<int:file_id>/download', methods=['GET'])
+def download_chatbot_file(id, file_id):
+    try:
+        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    except ValueError:
+        return jsonify({"error": "Invalid chatbot identifier"}), 400
+
+    file = Document.query.filter_by(id=file_id, chatbot_id=db_id).first()
+    if file and file.file_path:
+        url = get_sas_url(file.file_path)
+        if url:
+            return redirect(url)
+    return jsonify({"error": "File not found"}), 404
+
+@admin_portal_blueprint.route('/chatbots/<string:id>/qna', methods=['GET'])
+@token_required
+def get_chatbot_qna_files(current_user, id):
+    try:
+        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    except ValueError:
+        return jsonify({"error": "Invalid chatbot identifier"}), 400
+
+    files = Document.query.filter_by(chatbot_id=db_id, document_type='QNA').order_by(Document.updated_at.desc()).all()
+    return jsonify([{
+        "id": str(f.id),
+        "name": f.name,
+        "lastUpdate": f.updated_at.strftime("%I:%M %p %d/%m/%Y") if f.updated_at else ""
+    } for f in files])
+
+@admin_portal_blueprint.route('/chatbots/<string:id>/qna', methods=['POST'])
+@token_required
+def add_chatbot_qna_file(current_user, id):
+    try:
+        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    except ValueError:
+        return jsonify({"error": "Invalid chatbot identifier"}), 400
+
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+
+    filename = secure_filename(file.filename)
+    blob_path = f"chatbots/{db_id}/qna/{filename}"
+
+    if upload_blob(file, blob_path):
+        new_file = Document(name=filename, chatbot_id=db_id, document_type='QNA', file_path=blob_path, owner_id=current_user.id)
+        session.add(new_file)
+        session.commit()
+        return jsonify({"message": "File added"}), 201
+    else:
+        return jsonify({"error": "Failed to upload"}), 500
+
+@admin_portal_blueprint.route('/chatbots/<string:id>/qna/<int:file_id>', methods=['DELETE'])
+@token_required
+def delete_chatbot_qna_file(current_user, id, file_id):
+    try:
+        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    except ValueError:
+        return jsonify({"error": "Invalid chatbot identifier"}), 400
+
+    file = Document.query.filter_by(id=file_id, chatbot_id=db_id, document_type='QNA').first()
+    if not file:
+        return jsonify({"error": "File not found"}), 404
+
+    if file.file_path:
+        delete_blob(file.file_path)
+    session.delete(file)
+    session.commit()
+    return jsonify({"message": "Deleted"}), 200
+
+@admin_portal_blueprint.route('/chatbots/<string:id>/qna/<int:file_id>/download', methods=['GET'])
+def download_chatbot_qna_file(id, file_id):
+    try:
+        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    except ValueError:
+        return jsonify({"error": "Invalid chatbot identifier"}), 400
+
+    file = Document.query.filter_by(id=file_id, chatbot_id=db_id, document_type='QNA').first()
+    if file and file.file_path:
+        url = get_sas_url(file.file_path)
+        if url:
+            return redirect(url)
+    return jsonify({"error": "File not found"}), 404
+
 @admin_portal_blueprint.route('/chatbots/<string:id>/status', methods=['PATCH'])
 @token_required
 def update_chatbot_status(current_user, id):
@@ -404,3 +586,81 @@ def update_chatbot_status(current_user, id):
         bot.publish_date = None
     session.commit()
     return jsonify({"message": "Status updated"}), 200
+
+@admin_portal_blueprint.route('/logs/export', methods=['GET'])
+@token_required
+def export_logs(current_user):
+    chatbot_id = request.args.get('chatbot_id')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+
+    try:
+        start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+        end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+    except Exception:
+        return jsonify({"error": "Invalid date format"}), 400
+
+    query = session.query(ChatMessage, ChatSession, Chatbot)\
+        .join(ChatSession, ChatMessage.session_id == ChatSession.id)\
+        .join(Chatbot, ChatSession.chatbot_id == Chatbot.id)\
+        .filter(ChatMessage.created_at >= start_dt)\
+        .filter(ChatMessage.created_at <= end_dt)
+
+    if current_user.division:
+        query = query.filter((Chatbot.division == current_user.division) | (Chatbot.division.is_(None)))
+
+    if chatbot_id and chatbot_id.lower() != 'all':
+        try:
+            cid = int(chatbot_id[2:]) if chatbot_id.startswith("CB") else int(chatbot_id)
+            query = query.filter(Chatbot.id == cid)
+        except (TypeError, ValueError):
+            return jsonify({"error": "Invalid chatbot_id format"}), 400
+
+    query = query.order_by(ChatSession.id, ChatMessage.created_at)
+    messages = query.all()
+
+    rows = []
+    pending = None
+
+    for msg, sess, bot in messages:
+        if pending and pending['session_id'] != sess.id:
+            rows.append({
+                "Question": pending['msg'].message, "Answer": "", "Thumb up/thumb down": 0,
+                "Chatbot name": pending['bot_name'], "Timestamp": pending['msg'].created_at.strftime("%H:%M:%S %d-%m-%Y")
+            })
+            pending = None
+
+        if msg.is_user_message:
+            if pending:
+                rows.append({
+                    "Question": pending['msg'].message, "Answer": "", "Thumb up/thumb down": 0,
+                    "Chatbot name": pending['bot_name'], "Timestamp": pending['msg'].created_at.strftime("%H:%M:%S %d-%m-%Y")
+                })
+            pending = {'msg': msg, 'session_id': sess.id, 'bot_name': bot.name}
+        else:
+            if pending:
+                rows.append({
+                    "Question": pending['msg'].message, "Answer": msg.message, "Thumb up/thumb down": msg.like or 0,
+                    "Chatbot name": pending['bot_name'], "Timestamp": pending['msg'].created_at.strftime("%H:%M:%S %d-%m-%Y")
+                })
+                pending = None
+
+    if pending:
+        rows.append({
+            "Question": pending['msg'].message, "Answer": "", "Thumb up/thumb down": 0,
+            "Chatbot name": pending['bot_name'], "Timestamp": pending['msg'].created_at.strftime("%H:%M:%S %d-%m-%Y")
+        })
+
+    df = pd.DataFrame(rows)
+    columns = ['Question', 'Answer', 'Thumb up/thumb down', 'Timestamp']
+    if not chatbot_id or chatbot_id.lower() == 'all':
+        columns.insert(3, 'Chatbot name')
+
+    df = df[columns] if not df.empty else pd.DataFrame(columns=columns)
+
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False)
+    output.seek(0)
+
+    return send_file(output, download_name="chatlog.xlsx", as_attachment=True)
