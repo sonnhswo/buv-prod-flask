@@ -1,21 +1,20 @@
 import uuid
 import json
-import jwt
 import os
 from werkzeug.utils import secure_filename
-from functools import wraps
 from flask import Blueprint, request, jsonify, Response, stream_with_context, redirect, send_file
 from sqlalchemy import create_engine
-from datetime import datetime, timedelta, timezone
-from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
+from datetime import datetime
 import pandas as pd
 from io import BytesIO
 from app.chatbot import clear_history
 from app.chatbot import generate_response
-from app.db_models.raw_db import ChatSession, Chatbot, ChatMessage, Admin, Document
+from app.db_models.raw_db import ChatSession, Chatbot, ChatMessage, Document
 from app.extensions import db
 from config import Config
 from .database import uni_dbs
+from app.storage import upload_blob, delete_blob, get_sas_url
+from app.decorators import token_required
 
 config = Config()
 # Create a session
@@ -25,78 +24,6 @@ chatbot_blueprint = Blueprint('chatbot', __name__)
 question_suggest_blueprint = Blueprint('question_suggest', __name__)
 user_portal_blueprint = Blueprint('user_portal', __name__)
 admin_portal_blueprint = Blueprint('admin_portal', __name__)
-
-# Azure Blob Storage Helper Functions
-blob_service_client = None
-if config.BLOB_CONN_STRING:
-    try:
-        blob_service_client = BlobServiceClient.from_connection_string(config.BLOB_CONN_STRING)
-    except Exception as e:
-        print(f"Failed to initialize BlobServiceClient: {e}")
-container_name = config.BLOB_CONTAINER
-
-def upload_blob(file, blob_path):
-    if blob_service_client is None:
-        return False
-    try:
-        blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_path)
-        blob_client.upload_blob(file, overwrite=True)
-        return True
-    except Exception as e:
-        print(f"Error uploading blob: {e}")
-        return False
-
-def delete_blob(blob_path):
-    if blob_service_client is None:
-        return
-    try:
-        blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_path)
-        if blob_client.exists():
-            blob_client.delete_blob()
-    except Exception as e:
-        print(f"Error deleting blob: {e}")
-
-def get_sas_url(blob_path):
-    if blob_service_client is None:
-        return None
-    try:
-        sas_token = generate_blob_sas(
-            account_name=blob_service_client.account_name,
-            container_name=container_name,
-            blob_name=blob_path,
-            account_key=blob_service_client.credential.account_key,
-            permission=BlobSasPermissions(read=True),
-            expiry=datetime.now(timezone.utc) + timedelta(hours=1)
-        )
-        blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_path)
-        return f"{blob_client.url}?{sas_token}"
-    except Exception as e:
-        print(f"Error generating SAS URL: {e}")
-        return None
-
-def token_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        token = None
-        if 'Authorization' in request.headers:
-            auth_header = request.headers['Authorization']
-            if auth_header.startswith("Bearer "):
-                token = auth_header.split(" ")[1]
-
-        if not token:
-            return jsonify({'message': 'Token is missing!'}), 401
-
-        try:
-            # Add 60 seconds of leeway to account for clock skew between Auth server and API server
-            data = jwt.decode(token, config.JWT_SECRET, algorithms=["HS256"], leeway=60)
-            current_user = Admin.query.get(data['userId'])
-            if not current_user:
-                return jsonify({'message': 'User not found!'}), 401
-        except Exception as e:
-            return jsonify({'message': 'Token is invalid!', 'error': str(e)}), 401
-
-        return f(current_user, *args, **kwargs)
-    return decorated
 
 @chatbot_blueprint.route('/<string:chatbot_id>/new_session_id', methods=['GET'])
 def get_new_session_id(chatbot_id: str):
