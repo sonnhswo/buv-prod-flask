@@ -64,14 +64,22 @@ def chat(chatbot_id: int):
     if not chatbot:
         return jsonify({"error": "Chatbot not found"}), 404
 
-    ab_configs = config.AB_CONFIGS[chatbot.configuration['endpoint']]
-    except_keywords = ab_configs['except_keywords']
-    full_name = ab_configs['full_name']
-
+    ab_configs = None
+    if chatbot.configuration:
+        ab_configs = config.AB_CONFIGS.get(chatbot.configuration['endpoint'], default=None)
     
+    # phase 1 bots
+    if ab_configs:
+        except_keywords = ab_configs['except_keywords']
+        full_name = ab_configs['full_name']
+    # phase 2 bots
+    else:
+        except_keywords = []
+        full_name = chatbot.name
+
     ask_relevant_question = True
     for keyword in except_keywords:
-        if keyword in user_input:
+        if keyword.lower() in user_input.lower():
             answer = f"Thank you for your question. Unfortunately, I can only provide answers related to {full_name}. Please reach out to our Student Information Office at studentservice@buv.edu.vn for further assistance."
             response = {
                 "answer": answer,
@@ -83,6 +91,7 @@ def chat(chatbot_id: int):
             break
     
     if ask_relevant_question:
+        print(f"{full_name=}")
         response = generate_response(user_input, str(session_id), full_name)
         
     new_human_message = ChatMessage(message=user_input, is_user_message=True, session_id=session_id)

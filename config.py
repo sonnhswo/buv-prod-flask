@@ -18,9 +18,9 @@ class Config:
     AZURE_EMBEDDING_MODEL_OPENAI_VERSION = os.getenv('AZURE_EMBEDDING_MODEL_OPENAI_VERSION')
     print(f"{AZURE_EMBEDDING_MODEL_OPENAI_VERSION = }")
 
-    DETERMINISTIC_TMP = os.getenv("DETERMINISTIC_TMP")
+    DETERMINISTIC_TMP = int(os.getenv("DETERMINISTIC_TMP"))
     print(f"{DETERMINISTIC_TMP = }")
-    CREATIVE_TMP = os.getenv("CREATIVE_TMP")
+    CREATIVE_TMP = int(os.getenv("CREATIVE_TMP"))
     print(f"{CREATIVE_TMP = }")
     
     AZURE_INGEST_MODEL_DEPLOYMENT_NAME = os.getenv('AZURE_INGEST_MODEL_DEPLOYMENT_NAME')
@@ -37,15 +37,26 @@ class Config:
     print(f"{AI_SEARCH_ENDPOINT = }")
     INDEX_NAME = os.getenv("INDEX_NAME")
     print(f"{INDEX_NAME = }")
+    PHASE1_INDEX_NAME = os.getenv("PHASE1_INDEX_NAME")
+    print(f"{PHASE1_INDEX_NAME = }")
     AI_SEARCH_KEY = os.getenv("AI_SEARCH_KEY")
     print(f"{AI_SEARCH_KEY = }")
     VECTOR_SEARCH_PROFILE = os.getenv("VECTOR_SEARCH_PROFILE")
     print(f"{VECTOR_SEARCH_PROFILE = }")
 
-    CHUNK_SIZE = os.getenv("CHUNK_SIZE")
+    CHUNK_SIZE = int(os.getenv("CHUNK_SIZE"))
     print(f"{CHUNK_SIZE = }")
-    CHUNK_OVERLAP = os.getenv("CHUNK_OVERLAP")
+    CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP"))
     print(f"{CHUNK_OVERLAP = }")
+
+    DOC_TOP_K = int(os.getenv("DOC_TOP_K"))
+    print(f"{DOC_TOP_K = }")
+    QUESTION_TOP_K = int(os.getenv("QUESTION_TOP_K"))
+    print(f"{QUESTION_TOP_K = }")
+    FETCH_K = int(os.getenv("FETCH_K"))
+    print(f"{FETCH_K = }")
+    LAMBDA_MULT = float(os.getenv("LAMBDA_MULT"))
+    print(f"{LAMBDA_MULT = }")
 
     STORAGE_URL = os.getenv("STORAGE_URL")
     print(f"{STORAGE_URL = }")
@@ -56,7 +67,7 @@ class Config:
 
     DOCX_TO_PDF_API_URL = os.getenv("DOCX_TO_PDF_API_URL")
     print(f"{DOCX_TO_PDF_API_URL = }")
-    TIMEOUT = os.getenv("TIMEOUT")
+    TIMEOUT = int(os.getenv("TIMEOUT"))
     print(f"{TIMEOUT = }")
 
     BLOB_CONN_STRING = os.getenv('BLOB_CONN_STRING')
