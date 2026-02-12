@@ -23,7 +23,7 @@ class ChunkQuestions(BaseModel):
 
 class DocumentIngestor :
 
-    def __init__(self, chatbot_name: str, document_title: str):
+    def __init__(self, chatbot_name: str, document_title: str, document_path: str):
         """
         Class wrapper to handle document ingestion from Blob Storage to knowledge base on AI Search.
 
@@ -32,7 +32,7 @@ class DocumentIngestor :
         """
         self.chatbot = chatbot_name
         self.document_title = document_title
-        self.document_path = f"{self.chatbot}/{self.document_title}"
+        self.document_path = document_path
 
         self.PAGE_RE = re.compile(r'<!-- PageNumber="(\d+)" -->')
         self.PAGE_BREAK = "<!-- PageBreak -->"

@@ -442,7 +442,7 @@ def ingest_chatbot_file(current_user, id, file_id):
         ingestor = DocumentIngestor(
             chatbot_name = chatbot.name, 
             document_title = file.title, 
-            file_path = file.file_path
+            document_path = file.file_path
         )
         ingestor.ingest_document()
 
