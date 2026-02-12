@@ -5,8 +5,10 @@ from azure.storage.blob import BlobClient
 
 from pydantic import BaseModel, Field
 from typing import Optional
+import requests
 import json
 import re
+import io
 
 from app.azure_clients.kb_clients import doc_int_client, ai_search
 from app.llm_models.chat_models import llm_fixer, llm_generator
@@ -33,9 +35,33 @@ class DocumentIngestor :
         self.chatbot = chatbot_name
         self.document_title = document_title
         self.document_path = document_path
+        self.document_type = document_title.split('.')[-1]
 
         self.PAGE_RE = re.compile(r'<!-- PageNumber="(\d+)" -->')
         self.PAGE_BREAK = "<!-- PageBreak -->"
+
+    # ----------------------------------------------------------------------------------------------- #
+
+    def convert_docx_to_pdf_bytes(self, docx_bytes):
+        """
+        Automates DOCX to PDF conversion.
+        """
+        files = {
+            'file': (
+                self.document_title, 
+                io.BytesIO(docx_bytes), 
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document' # MIME Type
+            )
+        }
+        try:
+            response = requests.post(config.DOCX_TO_PDF_API_URL, files=files, timeout=config.TIMEOUT)
+            response.raise_for_status()
+
+            return response.content
+
+        except requests.exceptions.RequestException as e:
+            print(f"Error during PDF conversion: {e}")
+            return None
 
     # ----------------------------------------------------------------------------------------------- #
     
@@ -349,6 +375,10 @@ class DocumentIngestor :
         print(self.chatbot)
         # 1. call blob storage
         doc_bytes = self.get_file_from_blob_storage()
+
+        # convert docx->pdf
+        if self.document_type == 'docx':
+            doc_bytes = self.convert_docx_to_pdf_bytes(doc_bytes)
 
         # 2. call document intelligence
         docint_res = self.extract_from_doc_bytes(doc_bytes)

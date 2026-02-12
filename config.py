@@ -17,6 +17,11 @@ class Config:
     print(f"{AZURE_EMBEDDING_MODEL_DEPLOYMENT_NAME = }")
     AZURE_EMBEDDING_MODEL_OPENAI_VERSION = os.getenv('AZURE_EMBEDDING_MODEL_OPENAI_VERSION')
     print(f"{AZURE_EMBEDDING_MODEL_OPENAI_VERSION = }")
+
+    DETERMINISTIC_TMP = os.getenv("DETERMINISTIC_TMP")
+    print(f"{DETERMINISTIC_TMP = }")
+    CREATIVE_TMP = os.getenv("CREATIVE_TMP")
+    print(f"{CREATIVE_TMP = }")
     
     AZURE_INGEST_MODEL_DEPLOYMENT_NAME = os.getenv('AZURE_INGEST_MODEL_DEPLOYMENT_NAME')
     print(f"{AZURE_INGEST_MODEL_DEPLOYMENT_NAME = }")
@@ -34,10 +39,12 @@ class Config:
     print(f"{INDEX_NAME = }")
     AI_SEARCH_KEY = os.getenv("AI_SEARCH_KEY")
     print(f"{AI_SEARCH_KEY = }")
+    VECTOR_SEARCH_PROFILE = os.getenv("VECTOR_SEARCH_PROFILE")
+    print(f"{VECTOR_SEARCH_PROFILE = }")
 
-    CHUNK_SIZE = 500
+    CHUNK_SIZE = os.getenv("CHUNK_SIZE")
     print(f"{CHUNK_SIZE = }")
-    CHUNK_OVERLAP = 50
+    CHUNK_OVERLAP = os.getenv("CHUNK_OVERLAP")
     print(f"{CHUNK_OVERLAP = }")
 
     STORAGE_URL = os.getenv("STORAGE_URL")
@@ -46,6 +53,11 @@ class Config:
     print(f"{CONTAINER_NAME = }")
     STORAGE_KEY = os.getenv("STORAGE_KEY")
     print(f"{STORAGE_KEY = }")
+
+    DOCX_TO_PDF_API_URL = os.getenv("DOCX_TO_PDF_API_URL")
+    print(f"{DOCX_TO_PDF_API_URL = }")
+    TIMEOUT = os.getenv("TIMEOUT")
+    print(f"{TIMEOUT = }")
 
     BLOB_CONN_STRING = os.getenv('BLOB_CONN_STRING')
     BLOB_CONTAINER = os.getenv('BLOB_CONTAINER')

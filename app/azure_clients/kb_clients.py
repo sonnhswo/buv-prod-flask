@@ -26,7 +26,7 @@ index_fields = [
         type = SearchFieldDataType.Collection(SearchFieldDataType.Single),
         searchable = True,
         vector_search_dimensions = 3072,
-        vector_search_profile_name = "test-vector-profile-name",
+        vector_search_profile_name = config.VECTOR_SEARCH_PROFILE,
     ),
     SimpleField (  
         name = "document_title", # <-- field to filter by document_title
