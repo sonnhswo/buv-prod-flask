@@ -424,8 +424,6 @@ def upload_chatbot_file(current_user, id):
     else:
         return jsonify({"error": "Failed to upload to storage"}), 500
 
-# ====================================================================================================== 
-
 @admin_portal_blueprint.route('/chatbots/<string:id>/files/<int:file_id>/ingest', methods=['POST'])
 @token_required
 def ingest_chatbot_file(current_user, id, file_id):
@@ -449,18 +447,6 @@ def ingest_chatbot_file(current_user, id, file_id):
         ingestor.ingest_document()
 
     return jsonify({"message": "Ingested"}), 200
-
-@admin_portal_blueprint.route('/chatbots/<string:chatbot_name>/files/<string:title>/ingest', methods=['POST'])
-def test_ingest_chatbot_file(chatbot_name, title):
-    ingestor = DocumentIngestor(
-        chatbot_name = chatbot_name, 
-        document_title = title, 
-    )
-    ingestor.ingest_document()
-
-    return jsonify({"message": "Ingested"}), 200
-
-# ====================================================================================================== 
 
 @admin_portal_blueprint.route('/chatbots/<string:id>/files/<int:file_id>', methods=['DELETE'])
 @token_required
