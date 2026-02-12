@@ -15,6 +15,7 @@ from config import Config
 from .database import uni_dbs
 from app.storage import upload_blob, delete_blob, get_sas_url
 from app.decorators import token_required
+from app.document_ingestion import DocumentIngestor
 
 config = Config()
 # Create a session
@@ -422,6 +423,44 @@ def upload_chatbot_file(current_user, id):
         return jsonify({"id": str(new_file.id), "filename": filename, "size": size, "created_at": new_file.created_at.isoformat()}), 201
     else:
         return jsonify({"error": "Failed to upload to storage"}), 500
+
+# ====================================================================================================== 
+
+@admin_portal_blueprint.route('/chatbots/<string:id>/files/<int:file_id>/ingest', methods=['POST'])
+@token_required
+def ingest_chatbot_file(current_user, id, file_id):
+    try:
+        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    except ValueError:
+        return jsonify({"error": "Invalid chatbot identifier"}), 400
+
+    file = Document.query.filter_by(id=file_id, chatbot_id=db_id).first()
+    if not file:
+        return jsonify({"error": "File not found"}), 404
+    
+    chatbot = Chatbot.query.filter_by(id=db_id).first()
+
+    if chatbot.name and file.file_path:
+        ingestor = DocumentIngestor(
+            chatbot_name = chatbot.name, 
+            document_title = file.title, 
+            file_path = file.file_path
+        )
+        ingestor.ingest_document()
+
+    return jsonify({"message": "Ingested"}), 200
+
+@admin_portal_blueprint.route('/chatbots/<string:chatbot_name>/files/<string:title>/ingest', methods=['POST'])
+def test_ingest_chatbot_file(chatbot_name, title):
+    ingestor = DocumentIngestor(
+        chatbot_name = chatbot_name, 
+        document_title = title, 
+    )
+    ingestor.ingest_document()
+
+    return jsonify({"message": "Ingested"}), 200
+
+# ====================================================================================================== 
 
 @admin_portal_blueprint.route('/chatbots/<string:id>/files/<int:file_id>', methods=['DELETE'])
 @token_required

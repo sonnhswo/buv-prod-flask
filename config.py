@@ -18,6 +18,35 @@ class Config:
     AZURE_EMBEDDING_MODEL_OPENAI_VERSION = os.getenv('AZURE_EMBEDDING_MODEL_OPENAI_VERSION')
     print(f"{AZURE_EMBEDDING_MODEL_OPENAI_VERSION = }")
     
+    AZURE_INGEST_MODEL_DEPLOYMENT_NAME = os.getenv('AZURE_INGEST_MODEL_DEPLOYMENT_NAME')
+    print(f"{AZURE_INGEST_MODEL_DEPLOYMENT_NAME = }")
+    AZURE_INGEST_MODEL_DEPLOYMENT_VERSION = os.getenv('AZURE_INGEST_MODEL_DEPLOYMENT_VERSION')
+    print(f"{AZURE_INGEST_MODEL_DEPLOYMENT_VERSION = }")
+
+    DOC_INT_ENDPOINT = os.getenv("DOC_INT_ENDPOINT")
+    print(f"{DOC_INT_ENDPOINT = }")
+    DOC_INT_KEY = os.getenv("DOC_INT_KEY")
+    print(f"{DOC_INT_KEY = }")
+
+    AI_SEARCH_ENDPOINT = os.getenv("AI_SEARCH_ENDPOINT")
+    print(f"{AI_SEARCH_ENDPOINT = }")
+    INDEX_NAME = os.getenv("INDEX_NAME")
+    print(f"{INDEX_NAME = }")
+    AI_SEARCH_KEY = os.getenv("AI_SEARCH_KEY")
+    print(f"{AI_SEARCH_KEY = }")
+
+    CHUNK_SIZE = 500
+    print(f"{CHUNK_SIZE = }")
+    CHUNK_OVERLAP = 50
+    print(f"{CHUNK_OVERLAP = }")
+
+    STORAGE_URL = os.getenv("STORAGE_URL")
+    print(f"{STORAGE_URL = }")
+    CONTAINER_NAME = os.getenv("CONTAINER_NAME")
+    print(f"{CONTAINER_NAME = }")
+    STORAGE_KEY = os.getenv("STORAGE_KEY")
+    print(f"{STORAGE_KEY = }")
+
     BLOB_CONN_STRING = os.getenv('BLOB_CONN_STRING')
     BLOB_CONTAINER = os.getenv('BLOB_CONTAINER')
     
