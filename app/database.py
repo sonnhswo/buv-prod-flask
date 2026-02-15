@@ -25,15 +25,23 @@ chatbot_names = [
         "International Foundation Programme",
         "Arts University Bournemouth",
         "University of Stirling",
-        "uat_assessment_approval" 
-    ]
+        "uat_assessment_approval",
+        "uat_academic_misconduct",
+        "uat_academic_quality", 
+        "uat_grade_explanation",
+        "uat_marking_moderation",
+        "uat_sits_training",
+        "uat_student_group_work",
+        "uat_teaching_observation",
+        "uat_teaching_qualification" 
+]
 
 class AzureAISearchRetriever(BaseRetriever):
     chatbot: str = Field(..., description="Chatbot name for filtering")
     k: int = Field(default=3, description="Number of documents to return")
 
     def _get_relevant_documents(self, query: str) -> List[Document]:
-        print(f"[AI SEARCH RETRIEVER] Searching for: {query} (k={self.k})")
+        print(f"[AI SEARCH RETRIEVER] Searching (k={self.k})")
 
         # Use the MMR-specific method for diversity
         search_results_with_score = ai_search.max_marginal_relevance_search_with_score(
@@ -43,6 +51,7 @@ class AzureAISearchRetriever(BaseRetriever):
             lambda_mult = config.LAMBDA_MULT,           # Balanced diversity/relevance
             filters     = f"chatbot eq '{self.chatbot}'" 
         )
+        print(f"Found {len(search_results_with_score)} documents.")
 
         list_docs = []
         for doc_obj, score in search_results_with_score:
@@ -56,7 +65,7 @@ class AzureAISearchRetriever(BaseRetriever):
                 }
             )
             list_docs.append(doc)
-
+        
         return list_docs
 
 

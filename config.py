@@ -91,6 +91,7 @@ class Config:
     PGDATABASE5 = os.getenv('PGDATABASE5') # Raw Data database
     print(f"{PGDATABASE5 = }")
     PGDATABASE6 = os.getenv('PGDATABASE6') # Raw Data database
+    print(f"{PGDATABASE6 = }")
     DEMO_SU = os.getenv('DEMO_SU') # SU database
     print(f"{DEMO_SU = }")
     PROD_UOL = os.getenv('DEMO_UOL') # UOL database

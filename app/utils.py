@@ -45,7 +45,7 @@ class FormatedOutput(BaseModel):
     )
     page_number: Optional[str] = Field(
         default=None, 
-        description="The page number(s) where the info was found."
+        description="The page number(s) where the information was found. The page number MUST be selected from the specific context(s) used to write the answer. Do not include page number of irrelevant context."
     )
 
 def stringify_formatted_answer(inputs: FormatedOutput) -> str:
