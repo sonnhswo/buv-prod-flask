@@ -1,7 +1,7 @@
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.documents import Document
 
-from typing import List, Dict
+from typing import List
 from pydantic import Field
 
 from app.azure_clients.kb_clients import ai_search, phase1_ai_search
@@ -26,25 +26,6 @@ phase1_chatbots = [
     "International Foundation Programme",
     "Arts University Bournemouth",
     "University of Stirling"
-]
-
-
-chatbot_names = [
-        "British University Vietnam",
-        "Staffordshire University",
-        "University of London",
-        "International Foundation Programme",
-        "Arts University Bournemouth",
-        "University of Stirling",
-        "uat_assessment_approval",
-        "uat_academic_misconduct",
-        "uat_academic_quality", 
-        "uat_grade_explanation",
-        "uat_marking_moderation",
-        "uat_sits_training",
-        "uat_student_group_work",
-        "uat_teaching_observation",
-        "uat_teaching_qualification" 
 ]
 
 class AzureAISearchRetriever(BaseRetriever):
@@ -80,29 +61,3 @@ class AzureAISearchRetriever(BaseRetriever):
             list_docs.append(doc)
         
         return list_docs
-
-
-def initialize_retrievers() -> tuple[Dict[str, AzureAISearchRetriever], Dict[str, AzureAISearchRetriever]]:
-    """
-    Returns two dictionaries: 
-    - doc_retriever_dict (k=6)
-    - question_retriever_dict (k=3)
-    """
-
-    doc_retriever_dict = {}
-    question_retriever_dict = {}
-
-    for chatbot_name in chatbot_names:
-        # Create distinct retrievers with different k values
-        doc_retriever = AzureAISearchRetriever(chatbot=chatbot_name, k=config.DOC_TOP_K)
-        question_retriever = AzureAISearchRetriever(chatbot=chatbot_name, k=config.QUESTION_TOP_K)
-        
-        doc_retriever_dict[chatbot_name] = doc_retriever
-        question_retriever_dict[chatbot_name] = question_retriever
-        
-    return doc_retriever_dict, question_retriever_dict
-
-
-
-
-

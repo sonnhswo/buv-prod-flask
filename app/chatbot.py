@@ -2,14 +2,12 @@ from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
 from openai import BadRequestError
 
-from app.database import initialize_retrievers
+from app.database import AzureAISearchRetriever
 from app.utils import language_detection_chain, add_prefix_to_answer
 from app.chains import create_conversational_rag_chain, create_relevant_questions_chain, conversational_chain
 from config import Config
 
 config = Config()
-
-doc_retrievers, question_retrievers = initialize_retrievers()
 
 # Managing chat history
 store = {}
@@ -37,8 +35,8 @@ def generate_response(user_input: str, session_id: str, chatbot_name: str) -> st
             relevant_questions = []
         else:
             # create history aware retriever
-            doc_retriever = doc_retrievers[chatbot_name]
-            question_retriever = question_retrievers[chatbot_name]
+            doc_retriever = AzureAISearchRetriever(chatbot=chatbot_name, k=config.DOC_TOP_K)
+            question_retriever = AzureAISearchRetriever(chatbot=chatbot_name, k=config.QUESTION_TOP_K)
             
             conversational_rag_chain = create_conversational_rag_chain(doc_retriever, get_session_history)
             relevant_questions_chain = create_relevant_questions_chain(question_retriever)
