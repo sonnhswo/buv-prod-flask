@@ -83,8 +83,8 @@ def generate_response_stream(user_input: str, session_id: str, uni_name: str):
             yield {'type': 'questions', 'relevant_questions': []}
             yield {'type': 'done'}
         else:
-            doc_retriever = doc_retrievers[uni_name]
-            question_retriever = question_retrievers[uni_name]
+            doc_retriever = AzureAISearchRetriever(chatbot=uni_name, k=config.DOC_TOP_K)
+            question_retriever = AzureAISearchRetriever(chatbot=uni_name, k=config.QUESTION_TOP_K)
             
             conversational_rag_chain = create_conversational_rag_chain(doc_retriever, get_session_history)
             relevant_questions_chain = create_relevant_questions_chain(question_retriever)
