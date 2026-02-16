@@ -66,7 +66,7 @@ def chat(chatbot_id: int):
 
     ab_configs = None
     if chatbot.configuration:
-        ab_configs = config.AB_CONFIGS.get(chatbot.configuration['endpoint'], default=None)
+        ab_configs = config.AB_CONFIGS.get(chatbot.configuration['endpoint'])
     
     # phase 1 bots
     if ab_configs:
@@ -91,7 +91,7 @@ def chat(chatbot_id: int):
             break
     
     if ask_relevant_question:
-        print(f"{full_name=}")
+        print(f"Executing langchain for chatbot {full_name=}.")
         response = generate_response(user_input, str(session_id), full_name)
         
     new_human_message = ChatMessage(message=user_input, is_user_message=True, session_id=session_id)

@@ -4,7 +4,7 @@ from langchain_core.documents import Document
 from typing import List, Dict
 from pydantic import Field
 
-from app.azure_clients.kb_clients import ai_search
+from app.azure_clients.kb_clients import ai_search, phase1_ai_search
 from config import Config
 
 config = Config()
@@ -18,6 +18,17 @@ uni_dbs = {
     "Arts University Bournemouth": f"postgresql+psycopg://{config.PG_VECTOR_USER}:{config.PG_VECTOR_PASSWORD}@{config.PG_VECTOR_HOST}:{config.PGPORT}/{config.PROD_AUB}",
     "University of Stirling": f"postgresql+psycopg://{config.PG_VECTOR_USER}:{config.PG_VECTOR_PASSWORD}@{config.PG_VECTOR_HOST}:{config.PGPORT}/{config.PROD_US}"
 }
+
+phase1_chatbots = [
+    "British University Vietnam",
+    "Staffordshire University",
+    "University of London",
+    "International Foundation Programme",
+    "Arts University Bournemouth",
+    "University of Stirling"
+]
+
+
 chatbot_names = [
         "British University Vietnam",
         "Staffordshire University",
@@ -43,8 +54,10 @@ class AzureAISearchRetriever(BaseRetriever):
     def _get_relevant_documents(self, query: str) -> List[Document]:
         print(f"[AI SEARCH RETRIEVER] Searching (k={self.k})")
 
+        knowledge_base = ai_search if self.chatbot not in phase1_chatbots else phase1_ai_search
+
         # Use the MMR-specific method for diversity
-        search_results_with_score = ai_search.max_marginal_relevance_search_with_score(
+        search_results_with_score = knowledge_base.max_marginal_relevance_search_with_score(
             query       = query,
             k           = self.k,        # Uses the k passed during initialization (6 or 3)
             fetch_k     = config.FETCH_K,            # Candidates for diversity processing
