@@ -25,7 +25,7 @@ class ChunkQuestions(BaseModel):
 
 class DocumentIngestor :
 
-    def __init__(self, chatbot_name: str, document_title: str, document_path: str):
+    def __init__(self, chatbot_name: str, document_title: str):
         """
         Class wrapper to handle document ingestion from Blob Storage to knowledge base on AI Search.
 
@@ -34,7 +34,7 @@ class DocumentIngestor :
         """
         self.chatbot = chatbot_name
         self.document_title = document_title
-        self.document_path = document_path
+        self.document_path = f"{self.chatbot}/{self.document_title}"
         self.document_type = document_title.split('.')[-1]
 
         self.PAGE_RE = re.compile(r'<!-- PageNumber="(\d+)" -->')
@@ -54,6 +54,7 @@ class DocumentIngestor :
             )
         }
         try:
+            print(f"[CONVERT DOCX TO PDF] Converting {self.document_title} to PDF...")
             response = requests.post(config.DOCX_TO_PDF_API_URL, files=files, timeout=config.TIMEOUT)
             response.raise_for_status()
 
@@ -72,17 +73,19 @@ class DocumentIngestor :
         - If not (Doc like DOCX), approximate 3000 characters per page.
         """
         if self.PAGE_BREAK in text:
+            print("[RECONSTRUCT PAGE NUMBERS] Reconstructing page numbers...")
             pages = text.split(self.PAGE_BREAK)
             new_pages = []
             
             for i, page_content in enumerate(pages):
                 page_num = i + 1
-                if not self.PAGE_RE.search(page_content):
-                    page_content = f'<!-- PageNumber="{page_num}" -->\n' + page_content.lstrip()
+                page_content = self.PAGE_RE.sub("\n", page_content).strip()
+                page_content = f'\n<!-- PageNumber="{page_num}" -->\n' + page_content.lstrip() + '\n'
                 new_pages.append(page_content)
             
             return self.PAGE_BREAK.join(new_pages)
         else:
+            print("[RECONSTRUCT PAGE NUMBERS] No page breaks found, approximating page numbers...")
             # DOCX / Non-paginated heuristic: 3000 chars = 1 page
             page_size = 3000
             new_content = []
@@ -219,7 +222,7 @@ class DocumentIngestor :
         resp = llm_fixer.invoke(enhance_extraction_prompt)
         print("[ENHANCE EXTRACTION] Enhancing extraction successful.")
         return resp.content
-
+ 
     # ----------------------------------------------------------------------------------------------- #
 
     def attach_page_metadata(self, chunks: list[Document]) -> list[Document]:
@@ -236,7 +239,7 @@ class DocumentIngestor :
             
             if found_pages:
                 # If markers are found, this chunk belongs to these pages
-                chunk.metadata["page_number"] = found_pages
+                chunk.metadata["page_number"] = [found_pages[0]-1] + found_pages if current_page else found_pages
                 # Update our "sticky" tracker to the last page found in this chunk
                 current_page = found_pages[-1]
             else:
@@ -245,7 +248,7 @@ class DocumentIngestor :
 
             # 2. Clean up the content by removing the markers
             chunk.page_content = self.PAGE_RE.sub("", chunk.page_content).strip()
-
+        
         return chunks
 
     # ----------------------------------------------------------------------------------------------- #
