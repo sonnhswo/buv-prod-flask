@@ -2,14 +2,12 @@ from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
 from openai import BadRequestError
 
-from app.database import initialize_retrievers
+from app.database import AzureAISearchRetriever
 from app.utils import language_detection_chain, add_prefix_to_answer
 from app.chains import create_conversational_rag_chain, create_relevant_questions_chain, conversational_chain
 from config import Config
 
 config = Config()
-
-doc_retrievers, question_retrievers = initialize_retrievers()
 
 # Managing chat history
 store = {}
@@ -27,7 +25,7 @@ def clear_history(session_id: str):
     if session_id in store:
         del store[session_id]
 
-def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
+def generate_response(user_input: str, session_id: str, chatbot_name: str) -> str:
     try:
         language_detection = language_detection_chain.invoke({"input": user_input})
         if language_detection.strip().lower() == "vietnamese":
@@ -37,8 +35,8 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
             relevant_questions = []
         else:
             # create history aware retriever
-            doc_retriever = doc_retrievers[uni_name]
-            question_retriever = question_retrievers[uni_name]
+            doc_retriever = AzureAISearchRetriever(chatbot=chatbot_name, k=config.DOC_TOP_K)
+            question_retriever = AzureAISearchRetriever(chatbot=chatbot_name, k=config.QUESTION_TOP_K)
             
             conversational_rag_chain = create_conversational_rag_chain(doc_retriever, get_session_history)
             relevant_questions_chain = create_relevant_questions_chain(question_retriever)
@@ -52,7 +50,7 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
             relevant_questions = output.get("relevant_questions")
 
         return {
-            "answer": add_prefix_to_answer(answer, uni_name),
+            "answer": add_prefix_to_answer(answer, chatbot_name),
             "source": source,
             "page_number": page_number,
             "relevant_questions": relevant_questions
@@ -63,7 +61,7 @@ def generate_response(user_input: str, session_id: str, uni_name: str) -> str:
         standard_message = "For further assistance, please contact our Student Information Office via email at studentservice@buv.edu.vn or by phone at 0936 376 136."
         
         return {
-            "answer": add_prefix_to_answer(standard_message, uni_name),
+            "answer": add_prefix_to_answer(standard_message, chatbot_name),
             "source": None,
             "page_number": None,
             "relevant_questions": []
@@ -85,8 +83,8 @@ def generate_response_stream(user_input: str, session_id: str, uni_name: str):
             yield {'type': 'questions', 'relevant_questions': []}
             yield {'type': 'done'}
         else:
-            doc_retriever = doc_retrievers[uni_name]
-            question_retriever = question_retrievers[uni_name]
+            doc_retriever = AzureAISearchRetriever(chatbot=uni_name, k=config.DOC_TOP_K)
+            question_retriever = AzureAISearchRetriever(chatbot=uni_name, k=config.QUESTION_TOP_K)
             
             conversational_rag_chain = create_conversational_rag_chain(doc_retriever, get_session_history)
             relevant_questions_chain = create_relevant_questions_chain(question_retriever)
