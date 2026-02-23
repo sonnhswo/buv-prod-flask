@@ -50,7 +50,8 @@ def create_conversational_rag_chain(retriever, get_session_history):
 
 def create_relevant_questions_chain(retriever):
     def get_content_only(doc_list):
-        return [doc.page_content for doc in doc_list]
+        print(f"RELEVANT QUESTIONS: {[doc.metadata.get('matched_question') for doc in doc_list]}")
+        return [doc.metadata.get("matched_question") for doc in doc_list]
     chain = retriever | get_content_only | RunnablePassthrough(lambda x: {"questions": x}) | azure_openai.with_structured_output(RelevantQuestionsOutput)
     return chain
 
@@ -63,7 +64,6 @@ def conversational_chain(conversational_rag_chain, relevant_questions_chain, que
             "configurable": {"session_id": session_id}
         }
     )
-    pprint.pprint(response)
     relevant_questions = relevant_questions_chain.invoke(str(response['context']))
     output = extract_formatted_answer(response['answer'])
     output['relevant_questions'] = relevant_questions.questions
