@@ -19,12 +19,12 @@ config = Config()
 
 
 class LanguageDetectionOutput(BaseModel):
-    language: Literal["Vietnamese", "Other"] = Field(
-        description="The detected language of the text. 'Vietnamese' if the text is in Vietnamese, 'Other' otherwise."
+    language: Literal["English", "Non_English"] = Field(
+        description="The detected language of the text. 'English' if the text is in English, 'Non_English' for any other languages."
     )
 
 language_detection_prompt_template = """
-Identify whether the text below is in Vietnamese or another language.
+Identify whether the text below is in English or another language.
 
 <text>
 {input}
