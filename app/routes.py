@@ -436,6 +436,25 @@ def upload_chatbot_file(current_user, id):
 @admin_portal_blueprint.route('/chatbots/<string:id>/files/<int:file_id>/ingest', methods=['POST'])
 @token_required
 def ingest_chatbot_file(current_user, id, file_id):
+    """
+    Ingests a specific file associated with a chatbot into the knowledge base.
+    
+    This endpoint triggers the data extraction and vectorization process for a given file.
+    Depending on the `document_type` ('QNA' or 'KNOWLEDGE_BASE'), it uses the 
+    appropriate ingestor (`QnAIngestor` or `DocumentIngestor`).
+
+    Args:
+        current_user: The authenticated user object (injected by @token_required).
+        id (str): The chatbot identifier (e.g., 'CB001' or '1').
+        file_id (int): The ID of the file to ingest in the database.
+
+    Returns:
+        tuple[Response, int]: A JSON response and HTTP status code indicating success or failure.
+            - 200: Successfully ingested `{"message": "Ingested"}`.
+            - 400: Bad request (invalid chatbot ID, empty name, or unsupported document type).
+            - 404: File or Chatbot not found in the database.
+            - 500: Server error during the ingestion process.
+    """
     try:
         db_id = int(id[2:]) if id.startswith("CB") else int(id)
     except ValueError:
