@@ -15,7 +15,7 @@ from config import Config
 from .database import uni_dbs
 from app.storage import upload_blob, delete_blob, get_sas_url
 from app.decorators import token_required
-from app.document_ingestion import DocumentIngestor, QnAIngestor
+from app.document_ingestion import process_file_ingestion
 
 config = Config()
 # Create a session
@@ -429,6 +429,12 @@ def upload_chatbot_file(current_user, id):
         )
         session.add(new_file)
         session.commit()
+
+        try:
+            process_file_ingestion(chatbot.name, 'KNOWLEDGE_BASE', new_file.name, new_file.file_path)
+        except Exception as e:
+            return jsonify({"error": f"Failed to ingest file: \n\t{e}"}), 500
+
         return jsonify({"id": str(new_file.id), "filename": filename, "size": size, "created_at": new_file.created_at.isoformat()}), 201
     else:
         return jsonify({"error": "Failed to upload to storage"}), 500
@@ -471,23 +477,10 @@ def ingest_chatbot_file(current_user, id, file_id):
     if file.document_type not in ['QNA','KNOWLEDGE_BASE'] :
         return jsonify({"error": "Unrecognized file document type"}), 400
     try:
-        if file.document_type == 'QNA':
-            ingestor = QnAIngestor(
-                chatbot_name = chatbot.name, 
-                document_title = file.name, 
-                document_path = file.file_path
-            )
-            ingestor.ingest_qna()
-        else:
-            ingestor = DocumentIngestor(
-                chatbot_name = chatbot.name, 
-                document_title = file.name, 
-                document_path = file.file_path
-            )
-            ingestor.ingest_document()
+        process_file_ingestion(chatbot.name, file.document_type, file.name, file.file_path)
 
         return jsonify({"message": "Ingested"}), 200
-    
+
     except Exception as e:
         return jsonify({"error": f"Failed to ingest file: \n\t{e}"}), 500
 
@@ -545,6 +538,13 @@ def replace_chatbot_file(current_user, id, file_id):
         file_record.file_size = size
         file_record.owner_id = current_user.id
         session.commit()
+
+        chatbot = Chatbot.query.get(db_id)
+        try:
+            process_file_ingestion(chatbot.name, 'KNOWLEDGE_BASE', file_record.name, file_record.file_path)
+        except Exception as e:
+            return jsonify({"error": f"Failed to ingest file: \n\t{e}"}), 500
+
         return jsonify({"id": str(file_record.id), "filename": filename, "size": size, "created_at": file_record.created_at.isoformat()}), 200
     else:
         return jsonify({"error": "Failed to upload to storage"}), 500
@@ -599,6 +599,13 @@ def add_chatbot_qna_file(current_user, id):
         new_file = Document(name=filename, chatbot_id=db_id, document_type='QNA', file_path=blob_path, owner_id=current_user.id)
         session.add(new_file)
         session.commit()
+
+        chatbot = Chatbot.query.get(db_id)
+        try:
+            process_file_ingestion(chatbot.name, 'QNA', new_file.name, new_file.file_path)
+        except Exception as e:
+            return jsonify({"error": f"Failed to ingest file: \n\t{e}"}), 500
+
         return jsonify({"message": "File added"}), 201
     else:
         return jsonify({"error": "Failed to upload"}), 500

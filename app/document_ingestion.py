@@ -483,3 +483,22 @@ class QnAIngestor:
     def ingest_qna(self):
         df = self.get_file_from_blob_storage()
         self.upload_to_ai_search(df)
+
+def process_file_ingestion(chatbot_name: str, document_type: str, document_title: str, document_path: str) -> None:
+    """
+    Helper function to route file ingestion based on document type.
+    """
+    if document_type == 'QNA':
+        ingestor = QnAIngestor(
+            chatbot_name=chatbot_name, 
+            document_title=document_title, 
+            document_path=document_path
+        )
+        ingestor.ingest_qna()
+    else:
+        ingestor = DocumentIngestor(
+            chatbot_name=chatbot_name, 
+            document_title=document_title, 
+            document_path=document_path
+        )
+        ingestor.ingest_document()
