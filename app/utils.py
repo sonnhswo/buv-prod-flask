@@ -18,21 +18,22 @@ config = Config()
 #     return {"error": str(error)}
 
 
-language_detection_prompt_template = """
-Identify the language of the text below as either `Vietnamese` or `Other`.
+class LanguageDetectionOutput(BaseModel):
+    language: Literal["Vietnamese", "Other"] = Field(
+        description="The detected language of the text. 'Vietnamese' if the text is in Vietnamese, 'Other' otherwise."
+    )
 
-Respond with only one word.
+language_detection_prompt_template = """
+Identify whether the text below is in Vietnamese or another language.
 
 <text>
 {input}
 </text>
-
-Language:"""
+"""
 
 language_detection_chain = (
     PromptTemplate.from_template(language_detection_prompt_template)
-    | azure_openai
-    | StrOutputParser()
+    | azure_openai.with_structured_output(LanguageDetectionOutput)
 )
 
 class FormatedOutput(BaseModel):

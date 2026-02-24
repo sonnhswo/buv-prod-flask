@@ -28,7 +28,7 @@ def clear_history(session_id: str):
 def generate_response(user_input: str, session_id: str, chatbot_name: str) -> str:
     try:
         language_detection = language_detection_chain.invoke({"input": user_input})
-        if language_detection.strip().lower() == "vietnamese":
+        if language_detection.language == "Vietnamese":
             answer = "We're sorry for any inconvenience; however, our chatbot can only answer questions in English. Unfortunately, Vietnamese isn't available at the moment. Thank you for your understanding!"
             source = None
             page_number = None
@@ -76,7 +76,7 @@ def generate_response_stream(user_input: str, session_id: str, uni_name: str):
         language_detection = language_detection_chain.invoke({"input": user_input})
         print(f"{language_detection=}")
         
-        if language_detection.strip().lower() == "vietnamese":
+        if language_detection.language == "Vietnamese":
             answer = "We're sorry for any inconvenience; however, our chatbot can only answer questions in English. Unfortunately, Vietnamese isn't available at the moment. Thank you for your understanding!"
             yield {'type': 'content', 'content': answer}
             yield {'type': 'metadata', 'source': None, 'page_number': None}
