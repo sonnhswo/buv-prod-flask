@@ -15,7 +15,7 @@ from config import Config
 from .database import uni_dbs
 from app.storage import upload_blob, delete_blob, get_sas_url
 from app.decorators import token_required
-from app.document_ingestion import DocumentIngestor
+from app.document_ingestion import DocumentIngestor, QnAIngestor
 
 config = Config()
 # Create a session
@@ -446,16 +446,31 @@ def ingest_chatbot_file(current_user, id, file_id):
         return jsonify({"error": "File not found"}), 404
     
     chatbot = Chatbot.query.filter_by(id=db_id).first()
+    
+    if not chatbot.name :
+        return jsonify({"error": "Chatbot name empty"}), 400
+    if file.document_type not in ['QNA','KNOWLEDGE_BASE'] :
+        return jsonify({"error": "Unrecognized file document type"}), 400
+    try:
+        if file.document_type == 'QNA':
+            ingestor = QnAIngestor(
+                chatbot_name = chatbot.name, 
+                document_title = file.name, 
+                document_path = file.file_path
+            )
+            ingestor.ingest_qna()
+        else:
+            ingestor = DocumentIngestor(
+                chatbot_name = chatbot.name, 
+                document_title = file.name, 
+                document_path = file.file_path
+            )
+            ingestor.ingest_document()
 
-    if chatbot.name and file.file_path:
-        ingestor = DocumentIngestor(
-            chatbot_name = chatbot.name, 
-            document_title = file.title, 
-            document_path = file.file_path
-        )
-        ingestor.ingest_document()
-
-    return jsonify({"message": "Ingested"}), 200
+        return jsonify({"message": "Ingested"}), 200
+    
+    except Exception as e:
+        return jsonify({"error": f"Failed to ingest file: \n\t{e}"}), 500
 
 @admin_portal_blueprint.route('/chatbots/<string:id>/files/<int:file_id>', methods=['DELETE'])
 @token_required
