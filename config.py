@@ -39,6 +39,8 @@ class Config:
     print(f"{INDEX_NAME = }")
     PHASE1_INDEX_NAME = os.getenv("PHASE1_INDEX_NAME")
     print(f"{PHASE1_INDEX_NAME = }")
+    QNA_INDEX_NAME = os.getenv("QNA_INDEX_NAME")
+    print(f"{QNA_INDEX_NAME = }")
     AI_SEARCH_KEY = os.getenv("AI_SEARCH_KEY")
     print(f"{AI_SEARCH_KEY = }")
     VECTOR_SEARCH_PROFILE = os.getenv("VECTOR_SEARCH_PROFILE")

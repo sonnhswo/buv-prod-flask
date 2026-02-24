@@ -5,12 +5,13 @@ from azure.storage.blob import BlobClient
 
 from pydantic import BaseModel, Field
 from typing import Optional
+import pandas as pd
 import requests
 import json
 import re
 import io
 
-from app.azure_clients.kb_clients import doc_int_client, ai_search
+from app.azure_clients.kb_clients import doc_int_client, ai_search, qna_ai_search
 from app.llm_models.chat_models import llm_fixer, llm_generator
 from config import Config
 
@@ -416,3 +417,69 @@ class DocumentIngestor :
 
         # 6. upload to AI Search
         self.upload_chunk_to_ai_search(qc_pairs)
+
+class QnAIngestor:
+
+    def __init__(self, chatbot_name: str, document_title: str, document_path: str):
+        self.chatbot = chatbot_name
+        self.document_title = document_title
+        self.document_path = document_path
+
+    # ----------------------------------------------------------------------------------------------- #
+
+    def get_file_from_blob_storage(self) -> pd.DataFrame:
+        try:
+            print(f"[GET FILE FROM BLOB] Starting {self.document_path} download...")
+            
+            blob_client = BlobClient(
+                account_url    = config.STORAGE_URL,
+                container_name = config.CONTAINER_NAME,
+                credential     = config.STORAGE_KEY,
+                blob_name      = self.document_path
+            )
+            stream = io.BytesIO()
+            blob_client.download_blob().readinto(stream)
+            stream.seek(0)
+            
+            df = pd.read_excel(stream, engine='openpyxl')
+            
+            print(f"[GET FILE FROM BLOB] Successfully loaded {len(df)} rows.")
+            return df
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to download or parse blob: {e}")
+            return None
+    
+    # ----------------------------------------------------------------------------------------------- #
+
+    def upload_to_ai_search(self, qna_fd: pd.DataFrame) -> None:
+
+        qna_list = []
+        for record in qna_fd.to_dict("records"):
+            qna_doc = Document(
+                page_content = record.get("Question"),
+                metadata = {
+                    "qna_filename": self.document_title,
+                    "chatbot"     : self.chatbot,
+                    "metadata"    : json.dumps({
+                        "chatbot"        : self.chatbot,
+                        "document_title" : record.get("Source"),
+                        "page_number"    : record.get("Page"),
+                        "expected_answer": record.get("Expected answer")
+                    })
+                }
+            )
+            qna_list.append(qna_doc)
+        try :
+            print(f"[UPLOAD TO AISEARCH] uploading {len(qna_list)} rows to index.")
+            qna_ai_search.add_documents(qna_list)
+
+            print(f"[UPLOAD TO AISEARCH] upload successful.")
+        except Exception as e :
+            print(f"[UPLOAD TO AISEARCH] Error: {e}")
+
+    # ----------------------------------------------------------------------------------------------- #
+    
+    def ingest_qna(self):
+        df = self.get_file_from_blob_storage()
+        self.upload_to_ai_search(df)
