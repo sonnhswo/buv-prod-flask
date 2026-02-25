@@ -18,6 +18,8 @@ from .database import uni_dbs, delete_qna, delete_doc_from_kb
 from app.storage import upload_blob, delete_blob, get_sas_url
 from app.decorators import token_required
 from app.document_ingestion import process_file_ingestion
+from openpyxl.styles import Alignment
+from openpyxl.utils import get_column_letter
 
 config = Config()
 # Create a session
@@ -797,7 +799,33 @@ def export_logs(current_user):
 
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False)
+        # Give the sheet a name so we can reference it easily
+        sheet_name = 'Chat Logs'
+        df.to_excel(writer, index=False, sheet_name=sheet_name)
+        
+        # Access the openpyxl worksheet object
+        worksheet = writer.sheets[sheet_name]
+        
+        # Iterate through the columns to apply formatting
+        for idx, col in enumerate(df.columns):
+            # Calculate the maximum length of the data in the column (or header)
+            max_data_len = df[col].astype(str).map(len).max() if not df[col].empty else 0
+            max_len = max(max_data_len, len(str(col)))
+            
+            # Set a max width cap (e.g., 50) so long messages wrap instead of stretching horizontally
+            adjusted_width = min(max_len + 2, 50)
+            
+            # Get the column letter (A, B, C...)
+            col_letter = get_column_letter(idx + 1)
+            
+            # 1. Set the column width
+            worksheet.column_dimensions[col_letter].width = adjusted_width
+            
+            # 2. Enable text wrapping for all cells in this column so row heights scale automatically
+            for row in range(1, len(df) + 2):  # +2 accounts for 1-based index and header row
+                cell = worksheet[f"{col_letter}{row}"]
+                cell.alignment = Alignment(wrap_text=True, vertical='top')
+
     output.seek(0)
 
     return send_file(output, download_name="chatlog.xlsx", as_attachment=True)
