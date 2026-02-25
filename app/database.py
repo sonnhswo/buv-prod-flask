@@ -29,13 +29,14 @@ phase1_chatbots = [
 ]
 
 class AzureAISearchRetriever(BaseRetriever):
-    chatbot: str = Field(..., description="Chatbot name for filtering")
+    chatbot: str = Field(..., description="Chatbot id for filtering")
+    chatbot_name: str = Field(..., description="Chatbot name for legacy checking")
     k: int = Field(default=3, description="Number of documents to return")
 
     def _get_relevant_documents(self, query: str) -> List[Document]:
         print(f"[AI SEARCH RETRIEVER] Searching (k={self.k})")
 
-        knowledge_base = ai_search if self.chatbot not in phase1_chatbots else phase1_ai_search
+        knowledge_base = ai_search if self.chatbot_name not in phase1_chatbots else phase1_ai_search
 
         # Use the MMR-specific method for diversity
         search_results_with_score = knowledge_base.max_marginal_relevance_search_with_score(
@@ -61,9 +62,9 @@ class AzureAISearchRetriever(BaseRetriever):
             list_docs.append(doc)
         
         return list_docs
-    
+
 class QnARetriever(BaseRetriever):
-    chatbot: str = Field(..., description="Chatbot name for filtering")
+    chatbot: str = Field(..., description="Chatbot id for filtering")
     k: int = Field(default=1, description="Number of documents to return")
 
     def _get_relevant_documents(self, query: str) -> List[Document]:
@@ -91,26 +92,26 @@ class QnARetriever(BaseRetriever):
                 }
             )
             list_docs.append(doc)
-        
+
         return list_docs
-    
-def delete_qna(chatbot_name: str, document_name: str) -> int: 
+
+def delete_qna(chatbot_id: str, document_name: str) -> int: 
     """
     Delete the QnA file from knowledge base.
-    
-    :param chatbot_name: the name of the chatbot that owns this QnA file.
-    :type chatbot_name: str
+
+    :param chatbot_id: the ID of the chatbot that owns this QnA file.
+    :type chatbot_id: str
     :param document_name: the name of the QnA file (exactly as Document.name in PostgresDb).
     :type document_name: str
     :return: the number of rows successfully deleted, -1 in the case of failure.
     :rtype: int    
     """
     try: 
-        print(f"[DELETING QNA] starting deletion for {document_name}, of bot {chatbot_name}")
+        print(f"[DELETING QNA] starting deletion for {document_name}, of bot {chatbot_id}")
         docs_to_delete = qna_ai_search.client.search(
             "*",
             select = ["id"],
-            filter = f"chatbot eq '{chatbot_name}' and qna_filename eq '{document_name}'"
+            filter = f"chatbot eq '{chatbot_id}' and qna_filename eq '{document_name}'"
         )
         ids_to_delete = [ doc.get("id") for doc in docs_to_delete ]
 
@@ -123,12 +124,12 @@ def delete_qna(chatbot_name: str, document_name: str) -> int:
         print(f"[DELETING QNA] deletion failed with error: \n{e}")
         return -1
 
-def delete_doc_from_kb(chatbot_name: str, document_name: str) -> int: 
+def delete_doc_from_kb(chatbot_id: str, chatbot_name: str, document_name: str) -> int: 
     """
     Delete the document file from knowledge base.
-    
-    :param chatbot_name: the name of the chatbot that owns this document.
-    :type chatbot_name: str
+
+    :param chatbot_id: the id of the chatbot that owns this document.
+    :type chatbot_id: str
     :param document_name: the name of the document (exactly as Document.name in PostgresDb).
     :type document_name: str
     :return: the number of document chunks successfully deleted, -1 in the case of failure.
@@ -141,7 +142,7 @@ def delete_doc_from_kb(chatbot_name: str, document_name: str) -> int:
         docs_to_delete = knowledge_base.client.search(
             "*",
             select = ["id"],
-            filter = f"chatbot eq '{chatbot_name}' and document_title eq '{document_name}'"
+            filter = f"chatbot eq '{chatbot_id}' and document_title eq '{document_name}'"
         )
         ids_to_delete = [ doc.get("id") for doc in docs_to_delete ]
 
