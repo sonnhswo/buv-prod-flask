@@ -322,9 +322,9 @@ def get_chatbots(current_user):
         "id": f"CB{b.id:03d}",
         "name": b.name,
         "description": b.description or "",
-        "publishDate": b.publish_date.strftime("%d/%m/%Y") if b.publish_date else "",
-        "createdAt": b.created_at.strftime("%d/%m/%Y") if b.created_at else "",
-        "lastModified": b.updated_at.strftime("%I:%M %p %d/%m/%Y") if b.updated_at else "",
+        "publishDate": b.publish_date.isoformat() if b.publish_date else None,
+        "createdAt": b.created_at.isoformat() if b.created_at else None,
+        "lastModified": b.updated_at.isoformat() if b.updated_at else None,
         "status": "Active" if b.is_active else "Inactive"
     } for b in bots])
 
@@ -342,9 +342,9 @@ def get_admin_chatbot(current_user, id):
         "id": f"CB{b.id:03d}",
         "name": b.name,
         "description": b.description or "",
-        "publishDate": b.publish_date.strftime("%Y-%m-%dT%H:%M:%S.%fZ") if b.publish_date else "",
-        "createdAt": b.created_at.strftime("%d/%m/%Y") if b.created_at else "",
-        "lastModified": b.updated_at.strftime("%I:%M %p %d/%m/%Y") if b.updated_at else "",
+        "publishDate": b.publish_date.isoformat() if b.publish_date else None,
+        "createdAt": b.created_at.isoformat() if b.created_at else None,
+        "lastModified": b.updated_at.isoformat() if b.updated_at else None,
         "status": "Active" if b.is_active else "Inactive"
     })
 
@@ -612,7 +612,7 @@ def get_chatbot_qna_files(current_user, id):
     return jsonify([{
         "id": str(f.id),
         "name": f.name,
-        "lastUpdate": f.updated_at.strftime("%I:%M %p %d/%m/%Y") if f.updated_at else ""
+        "lastUpdate": f.updated_at.isoformat() if f.updated_at else None
     } for f in files])
 
 @admin_portal_blueprint.route('/chatbots/<string:id>/qna', methods=['POST'])
