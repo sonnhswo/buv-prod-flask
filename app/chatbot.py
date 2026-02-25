@@ -2,7 +2,7 @@ from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
 from openai import BadRequestError
 
-from app.database import AzureAISearchRetriever
+from app.database import AzureAISearchRetriever, QnARetriever
 from app.utils import language_detection_chain, add_prefix_to_answer
 from app.chains import create_conversational_rag_chain, create_relevant_questions_chain, conversational_chain
 from config import Config
@@ -35,19 +35,34 @@ def generate_response(user_input: str, session_id: str, chatbot_name: str) -> st
             relevant_questions = []
         else:
             # create history aware retriever
+            qna_retriever = QnARetriever(chatbot=chatbot_name, k=1)
             doc_retriever = AzureAISearchRetriever(chatbot=chatbot_name, k=config.DOC_TOP_K)
             question_retriever = AzureAISearchRetriever(chatbot=chatbot_name, k=config.QUESTION_TOP_K)
             
             conversational_rag_chain = create_conversational_rag_chain(doc_retriever, get_session_history)
             relevant_questions_chain = create_relevant_questions_chain(question_retriever)
-
-            trim_message_history(session_id)
-            output = conversational_chain(conversational_rag_chain, relevant_questions_chain, user_input, session_id)
             
-            answer = output.get("answer")
-            source = output.get("source")
-            page_number = output.get("page_number")
-            relevant_questions = output.get("relevant_questions")
+            trim_message_history(session_id)
+
+            qna_found = qna_retriever.invoke(user_input)
+
+            # QnA found - return found answer + relevant questions
+            if len(qna_found):
+                questions_found = relevant_questions_chain.invoke(qna_found[0].page_content)
+
+                answer = qna_found[0].page_content
+                source = qna_found[0].metadata.get("title")
+                page_number = qna_found[0].metadata.get("page_number")
+                relevant_questions = questions_found.questions
+            
+            # QnA not found - proceed with normal workflow
+            else:
+                output = conversational_chain(conversational_rag_chain, relevant_questions_chain, user_input, session_id)
+                
+                answer = output.get("answer")
+                source = output.get("source")
+                page_number = output.get("page_number")
+                relevant_questions = output.get("relevant_questions")
 
         return {
             "answer": add_prefix_to_answer(answer, chatbot_name),
