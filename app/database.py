@@ -93,3 +93,63 @@ class QnARetriever(BaseRetriever):
             list_docs.append(doc)
         
         return list_docs
+    
+def delete_qna(chatbot_name: str, document_name: str) -> int: 
+    """
+    Delete the QnA file from knowledge base.
+    
+    :param chatbot_name: the name of the chatbot that owns this QnA file.
+    :type chatbot_name: str
+    :param document_name: the name of the QnA file (exactly as Document.name in PostgresDb).
+    :type document_name: str
+    :return: the number of rows successfully deleted, -1 in the case of failure.
+    :rtype: int    
+    """
+    try: 
+        print(f"[DELETING QNA] starting deletion for {document_name}, of bot {chatbot_name}")
+        docs_to_delete = qna_ai_search.client.search(
+            "*",
+            select = ["id"],
+            filter = f"chatbot eq '{chatbot_name}' and qna_filename eq '{document_name}'"
+        )
+        ids_to_delete = [ doc.get("id") for doc in docs_to_delete ]
+
+        nb_rows_deleted = len(ids_to_delete)
+        qna_ai_search.delete(ids_to_delete)
+        
+        print(f"[DELETING QNA] deleted {nb_rows_deleted} rows successfully")
+        return nb_rows_deleted
+    except Exception as e:
+        print(f"[DELETING QNA] deletion failed with error: \n{e}")
+        return -1
+
+def delete_doc_from_kb(chatbot_name: str, document_name: str) -> int: 
+    """
+    Delete the document file from knowledge base.
+    
+    :param chatbot_name: the name of the chatbot that owns this document.
+    :type chatbot_name: str
+    :param document_name: the name of the document (exactly as Document.name in PostgresDb).
+    :type document_name: str
+    :return: the number of document chunks successfully deleted, -1 in the case of failure.
+    :rtype: int    
+    """
+    try: 
+        print(f"[DELETING DOC] starting deletion for {document_name}, of bot {chatbot_name}")
+
+        knowledge_base = ai_search if chatbot_name not in phase1_chatbots else phase1_ai_search
+        docs_to_delete = knowledge_base.client.search(
+            "*",
+            select = ["id"],
+            filter = f"chatbot eq '{chatbot_name}' and document_title eq '{document_name}'"
+        )
+        ids_to_delete = [ doc.get("id") for doc in docs_to_delete ]
+
+        nb_rows_deleted = len(ids_to_delete)
+        knowledge_base.delete(ids_to_delete)
+        
+        print(f"[DELETING DOC] deleted {nb_rows_deleted} docs successfully")
+        return nb_rows_deleted
+    except Exception as e:
+        print(f"[DELETING DOC] deletion failed with error: \n{e}")
+        return -1
