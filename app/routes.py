@@ -1,6 +1,8 @@
 import uuid
 import json
 import os
+import threading
+import queue
 from werkzeug.utils import secure_filename
 from flask import Blueprint, request, jsonify, Response, stream_with_context, redirect, send_file
 from sqlalchemy import create_engine
@@ -12,7 +14,7 @@ from app.chatbot import generate_response
 from app.db_models.raw_db import ChatSession, Chatbot, ChatMessage, Document
 from app.extensions import db
 from config import Config
-from .database import uni_dbs
+from .database import uni_dbs, delete_qna, delete_doc_from_kb
 from app.storage import upload_blob, delete_blob, get_sas_url
 from app.decorators import token_required
 from app.document_ingestion import process_file_ingestion
@@ -25,6 +27,22 @@ chatbot_blueprint = Blueprint('chatbot', __name__)
 question_suggest_blueprint = Blueprint('question_suggest', __name__)
 user_portal_blueprint = Blueprint('user_portal', __name__)
 admin_portal_blueprint = Blueprint('admin_portal', __name__)
+
+def execute_safely(func, *args, **kwargs):
+    q = queue.Queue()
+    def wrapper():
+        try:
+            res = func(*args, **kwargs)
+            q.put(("SUCCESS", res))
+        except Exception as e:
+            q.put(("ERROR", e))
+    t = threading.Thread(target=wrapper)
+    t.start()
+    t.join()
+    status, res = q.get()
+    if status == "ERROR":
+        raise res
+    return res
 
 @chatbot_blueprint.route('/<string:chatbot_id>/new_session_id', methods=['GET'])
 def get_new_session_id(chatbot_id: str):
@@ -418,7 +436,7 @@ def upload_chatbot_file(current_user, id):
     filename = secure_filename(file.filename)
     blob_path = f"chatbots/{db_id}/files/{filename}"
 
-    if upload_blob(file, blob_path):
+    if execute_safely(upload_blob, file, blob_path):
         new_file = Document(
             name=filename, 
             file_size=size, 
@@ -431,8 +449,11 @@ def upload_chatbot_file(current_user, id):
         session.commit()
 
         try:
-            process_file_ingestion(chatbot.name, 'KNOWLEDGE_BASE', new_file.name, new_file.file_path)
+            execute_safely(process_file_ingestion, chatbot.name, 'KNOWLEDGE_BASE', new_file.name, new_file.file_path)
         except Exception as e:
+            execute_safely(delete_blob, blob_path)
+            session.delete(new_file)
+            session.commit()
             return jsonify({"error": f"Failed to ingest file: \n\t{e}"}), 500
 
         return jsonify({"id": str(new_file.id), "filename": filename, "size": size, "created_at": new_file.created_at.isoformat()}), 201
@@ -477,7 +498,7 @@ def ingest_chatbot_file(current_user, id, file_id):
     if file.document_type not in ['QNA','KNOWLEDGE_BASE'] :
         return jsonify({"error": "Unrecognized file document type"}), 400
     try:
-        process_file_ingestion(chatbot.name, file.document_type, file.name, file.file_path)
+        execute_safely(process_file_ingestion, chatbot.name, file.document_type, file.name, file.file_path)
 
         return jsonify({"message": "Ingested"}), 200
 
@@ -496,12 +517,23 @@ def delete_chatbot_file(current_user, id, file_id):
     if not file:
         return jsonify({"error": "File not found"}), 404
 
-    if file.file_path:
-        delete_blob(file.file_path)
+    chatbot = Chatbot.query.get(db_id)
+    chatbot_name = chatbot.name if chatbot else None
+    file_name = file.name
 
-    session.delete(file)
-    session.commit()
-    return jsonify({"message": "Deleted"}), 200
+    try:
+        if chatbot_name and file_name:
+            res = execute_safely(delete_doc_from_kb, chatbot_name, file_name)
+            if res == -1:
+                raise Exception("Failed to delete document from KB")
+        if file.file_path:
+            execute_safely(delete_blob, file.file_path)
+        session.delete(file)
+        session.commit()
+        return jsonify({"message": "Deleted"}), 200
+    except Exception as e:
+        session.rollback()
+        return jsonify({"error": f"Failed to delete file: {str(e)}"}), 500
 
 @admin_portal_blueprint.route('/chatbots/<string:id>/files/<int:file_id>', methods=['PUT'])
 @token_required
@@ -528,20 +560,25 @@ def replace_chatbot_file(current_user, id, file_id):
 
     filename = secure_filename(file.filename)
 
+    chatbot = Chatbot.query.get(db_id)
+    if chatbot and file_record.name:
+        res = execute_safely(delete_doc_from_kb, chatbot.name, file_record.name)
+        if res == -1:
+            return jsonify({"error": "Failed to delete old document from KB"}), 500
+
     if file_record.file_path:
         delete_blob(file_record.file_path)
 
     blob_path = f"chatbots/{db_id}/files/{filename}"
-    if upload_blob(file, blob_path):
+    if execute_safely(upload_blob, file, blob_path):
         file_record.name = filename
         file_record.file_path = blob_path
         file_record.file_size = size
         file_record.owner_id = current_user.id
         session.commit()
 
-        chatbot = Chatbot.query.get(db_id)
         try:
-            process_file_ingestion(chatbot.name, 'KNOWLEDGE_BASE', file_record.name, file_record.file_path)
+            execute_safely(process_file_ingestion, chatbot.name, 'KNOWLEDGE_BASE', file_record.name, file_record.file_path)
         except Exception as e:
             return jsonify({"error": f"Failed to ingest file: \n\t{e}"}), 500
 
@@ -595,15 +632,18 @@ def add_chatbot_qna_file(current_user, id):
     filename = secure_filename(file.filename)
     blob_path = f"chatbots/{db_id}/qna/{filename}"
 
-    if upload_blob(file, blob_path):
+    if execute_safely(upload_blob, file, blob_path):
         new_file = Document(name=filename, chatbot_id=db_id, document_type='QNA', file_path=blob_path, owner_id=current_user.id)
         session.add(new_file)
         session.commit()
 
         chatbot = Chatbot.query.get(db_id)
         try:
-            process_file_ingestion(chatbot.name, 'QNA', new_file.name, new_file.file_path)
+            execute_safely(process_file_ingestion, chatbot.name, 'QNA', new_file.name, new_file.file_path)
         except Exception as e:
+            execute_safely(delete_blob, blob_path)
+            session.delete(new_file)
+            session.commit()
             return jsonify({"error": f"Failed to ingest file: \n\t{e}"}), 500
 
         return jsonify({"message": "File added"}), 201
@@ -622,11 +662,23 @@ def delete_chatbot_qna_file(current_user, id, file_id):
     if not file:
         return jsonify({"error": "File not found"}), 404
 
-    if file.file_path:
-        delete_blob(file.file_path)
-    session.delete(file)
-    session.commit()
-    return jsonify({"message": "Deleted"}), 200
+    chatbot = Chatbot.query.get(db_id)
+    chatbot_name = chatbot.name if chatbot else None
+    file_name = file.name
+
+    try:
+        if chatbot_name and file_name:
+            res = execute_safely(delete_qna, chatbot_name, file_name)
+            if res == -1:
+                raise Exception("Failed to delete QnA from KB")
+        if file.file_path:
+            execute_safely(delete_blob, file.file_path)
+        session.delete(file)
+        session.commit()
+        return jsonify({"message": "Deleted"}), 200
+    except Exception as e:
+        session.rollback()
+        return jsonify({"error": f"Failed to delete QnA file: {str(e)}"}), 500
 
 @admin_portal_blueprint.route('/chatbots/<string:id>/qna/<int:file_id>/download', methods=['GET'])
 def download_chatbot_qna_file(id, file_id):
