@@ -109,11 +109,11 @@ def chat(chatbot_id: int):
             }
             ask_relevant_question = False
             break
-    
+
     if ask_relevant_question:
         print(f"Executing langchain for chatbot {full_name=}.")
-        response = generate_response(user_input, str(session_id), full_name)
-        
+        response = generate_response(user_input, str(session_id), str(chatbot.id), full_name)
+
     new_human_message = ChatMessage(message=user_input, is_user_message=True, session_id=session_id)
     new_ai_message = ChatMessage(message=response["answer"], is_user_message=False, session_id=session_id)
     session.add(new_human_message)
@@ -171,9 +171,9 @@ def chat_stream(chatbot_id: int):
         if ask_relevant_question:
             from app.chatbot import generate_response_stream
             full_answer = ""
-            
+
             try:
-                for chunk in generate_response_stream(user_input, str(session_id), full_name):
+                for chunk in generate_response_stream(user_input, str(session_id), str(chatbot.id), full_name):
                     if chunk['type'] == 'content':
                         full_answer += chunk['content']
                     yield f"data: {json.dumps(chunk)}\n\n"
@@ -461,7 +461,7 @@ def upload_chatbot_file(current_user, id):
         session.commit()
 
         try:
-            execute_safely(process_file_ingestion, chatbot.name, 'KNOWLEDGE_BASE', new_file.name, new_file.file_path)
+            execute_safely(process_file_ingestion, str(chatbot.id), 'KNOWLEDGE_BASE', new_file.name, new_file.file_path)
         except Exception as e:
             execute_safely(delete_blob, blob_path)
             session.delete(new_file)
@@ -510,7 +510,7 @@ def ingest_chatbot_file(current_user, id, file_id):
     if file.document_type not in ['QNA','KNOWLEDGE_BASE'] :
         return jsonify({"error": "Unrecognized file document type"}), 400
     try:
-        execute_safely(process_file_ingestion, chatbot.name, file.document_type, file.name, file.file_path)
+        execute_safely(process_file_ingestion, str(chatbot.id), file.document_type, file.name, file.file_path)
 
         return jsonify({"message": "Ingested"}), 200
 
@@ -535,7 +535,7 @@ def delete_chatbot_file(current_user, id, file_id):
 
     try:
         if chatbot_name and file_name:
-            res = execute_safely(delete_doc_from_kb, chatbot_name, file_name)
+            res = execute_safely(delete_doc_from_kb, str(chatbot.id), chatbot_name, file_name)
             if res == -1:
                 raise Exception("Failed to delete document from KB")
         if file.file_path:
@@ -574,7 +574,7 @@ def replace_chatbot_file(current_user, id, file_id):
 
     chatbot = Chatbot.query.get(db_id)
     if chatbot and file_record.name:
-        res = execute_safely(delete_doc_from_kb, chatbot.name, file_record.name)
+        res = execute_safely(delete_doc_from_kb, str(chatbot.id), chatbot.name, file_record.name)
         if res == -1:
             return jsonify({"error": "Failed to delete old document from KB"}), 500
 
@@ -590,7 +590,7 @@ def replace_chatbot_file(current_user, id, file_id):
         session.commit()
 
         try:
-            execute_safely(process_file_ingestion, chatbot.name, 'KNOWLEDGE_BASE', file_record.name, file_record.file_path)
+            execute_safely(process_file_ingestion, str(chatbot.id), 'KNOWLEDGE_BASE', file_record.name, file_record.file_path)
         except Exception as e:
             return jsonify({"error": f"Failed to ingest file: \n\t{e}"}), 500
 
@@ -651,7 +651,7 @@ def add_chatbot_qna_file(current_user, id):
 
         chatbot = Chatbot.query.get(db_id)
         try:
-            execute_safely(process_file_ingestion, chatbot.name, 'QNA', new_file.name, new_file.file_path)
+            execute_safely(process_file_ingestion, str(chatbot.id), 'QNA', new_file.name, new_file.file_path)
         except Exception as e:
             execute_safely(delete_blob, blob_path)
             session.delete(new_file)
@@ -680,7 +680,7 @@ def delete_chatbot_qna_file(current_user, id, file_id):
 
     try:
         if chatbot_name and file_name:
-            res = execute_safely(delete_qna, chatbot_name, file_name)
+            res = execute_safely(delete_qna, str(chatbot.id), file_name)
             if res == -1:
                 raise Exception("Failed to delete QnA from KB")
         if file.file_path:

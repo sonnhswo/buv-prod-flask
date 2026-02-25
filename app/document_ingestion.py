@@ -26,14 +26,14 @@ class ChunkQuestions(BaseModel):
 
 class DocumentIngestor :
 
-    def __init__(self, chatbot_name: str, document_title: str, document_path: str):
+    def __init__(self, chatbot_id: str, document_title: str, document_path: str):
         """
         Class wrapper to handle document ingestion from Blob Storage to knowledge base on AI Search.
 
-        chatbot_name : unique name of chatbot.
+        chatbot_id : unique ID of chatbot.
         document_title : name of the document exactly as the one on blob storage (ex: "Student_Handbook_2025.pdf").
         """
-        self.chatbot = chatbot_name
+        self.chatbot = chatbot_id
         self.document_title = document_title
         self.document_path = document_path
         self.document_type = document_title.split('.')[-1]
@@ -420,8 +420,8 @@ class DocumentIngestor :
 
 class QnAIngestor:
 
-    def __init__(self, chatbot_name: str, document_title: str, document_path: str):
-        self.chatbot = chatbot_name
+    def __init__(self, chatbot_id: str, document_title: str, document_path: str):
+        self.chatbot = chatbot_id
         self.document_title = document_title
         self.document_path = document_path
 
@@ -484,20 +484,20 @@ class QnAIngestor:
         df = self.get_file_from_blob_storage()
         self.upload_to_ai_search(df)
 
-def process_file_ingestion(chatbot_name: str, document_type: str, document_title: str, document_path: str) -> None:
+def process_file_ingestion(chatbot_id: str, document_type: str, document_title: str, document_path: str) -> None:
     """
     Helper function to route file ingestion based on document type.
     """
     if document_type == 'QNA':
         ingestor = QnAIngestor(
-            chatbot_name=chatbot_name, 
+            chatbot_id=chatbot_id, 
             document_title=document_title, 
             document_path=document_path
         )
         ingestor.ingest_qna()
     else:
         ingestor = DocumentIngestor(
-            chatbot_name=chatbot_name, 
+            chatbot_id=chatbot_id, 
             document_title=document_title, 
             document_path=document_path
         )

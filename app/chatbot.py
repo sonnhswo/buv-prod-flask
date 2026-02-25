@@ -25,7 +25,7 @@ def clear_history(session_id: str):
     if session_id in store:
         del store[session_id]
 
-def generate_response(user_input: str, session_id: str, chatbot_name: str) -> str:
+def generate_response(user_input: str, session_id: str, chatbot_id: str, chatbot_name: str) -> dict:
     try:
         language_detection = language_detection_chain.invoke({"input": user_input})
         if language_detection.language != "English":
@@ -35,10 +35,10 @@ def generate_response(user_input: str, session_id: str, chatbot_name: str) -> st
             relevant_questions = []
         else:
             # create history aware retriever
-            qna_retriever = QnARetriever(chatbot=chatbot_name, k=1)
-            doc_retriever = AzureAISearchRetriever(chatbot=chatbot_name, k=config.DOC_TOP_K)
-            question_retriever = AzureAISearchRetriever(chatbot=chatbot_name, k=config.QUESTION_TOP_K)
-            
+            qna_retriever = QnARetriever(chatbot=chatbot_id, k=1)
+            doc_retriever = AzureAISearchRetriever(chatbot=chatbot_id, chatbot_name=chatbot_name, k=config.DOC_TOP_K)
+            question_retriever = AzureAISearchRetriever(chatbot=chatbot_id, chatbot_name=chatbot_name, k=config.QUESTION_TOP_K)
+
             conversational_rag_chain = create_conversational_rag_chain(doc_retriever, get_session_history)
             relevant_questions_chain = create_relevant_questions_chain(question_retriever)
             
@@ -85,7 +85,7 @@ def generate_response(user_input: str, session_id: str, chatbot_name: str) -> st
         print(e)
 
 
-def generate_response_stream(user_input: str, session_id: str, uni_name: str):
+def generate_response_stream(user_input: str, session_id: str, chatbot_id: str, uni_name: str):
     """Generator function for streaming responses"""
     try:
         language_detection = language_detection_chain.invoke({"input": user_input})
@@ -98,9 +98,9 @@ def generate_response_stream(user_input: str, session_id: str, uni_name: str):
             yield {'type': 'questions', 'relevant_questions': []}
             yield {'type': 'done'}
         else:
-            doc_retriever = AzureAISearchRetriever(chatbot=uni_name, k=config.DOC_TOP_K)
-            question_retriever = AzureAISearchRetriever(chatbot=uni_name, k=config.QUESTION_TOP_K)
-            
+            doc_retriever = AzureAISearchRetriever(chatbot=chatbot_id, chatbot_name=uni_name, k=config.DOC_TOP_K)
+            question_retriever = AzureAISearchRetriever(chatbot=chatbot_id, chatbot_name=uni_name, k=config.QUESTION_TOP_K)
+
             conversational_rag_chain = create_conversational_rag_chain(doc_retriever, get_session_history)
             relevant_questions_chain = create_relevant_questions_chain(question_retriever)
 
