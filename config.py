@@ -146,5 +146,5 @@ class Config:
     # CORS Configuration
     CORS_ORIGINS = os.getenv('CORS_ORIGINS', '*').split(',')
     CORS_ALLOW_HEADERS = ['Content-Type', 'Authorization', 'X-Requested-With']
-    CORS_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+    CORS_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH']
     CORS_SUPPORTS_CREDENTIALS = True
