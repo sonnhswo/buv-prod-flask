@@ -307,7 +307,16 @@ def get_chatbot_detail(chatbot_id):
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-    
+
+@user_portal_blueprint.route('/chatbots/<int:chatbot_id>/files/<string:filename>/download', methods=['GET'])
+def download_chatbot_file_by_name(chatbot_id, filename):
+    file = Document.query.filter_by(name=filename, chatbot_id=chatbot_id).first()
+    if file and file.file_path:
+        url = get_sas_url(file.file_path, filename=file.name)
+        if url:
+            return redirect(url)
+    return jsonify({"error": "File not found"}), 404
+
 # Admin Portal Endpoints
 
 @admin_portal_blueprint.route('/chatbots', methods=['GET'])
@@ -391,6 +400,7 @@ def update_chatbot(current_user, id):
     if data.get('status'):
         bot.is_active = True if data.get('status') == 'Active' else False
 
+    bot.updated_at = db.func.now()
     session.commit()
     return jsonify({"message": "Updated"}), 200
 
@@ -595,7 +605,7 @@ def download_chatbot_file(id, file_id):
 
     file = Document.query.filter_by(id=file_id, chatbot_id=db_id).first()
     if file and file.file_path:
-        url = get_sas_url(file.file_path)
+        url = get_sas_url(file.file_path, filename=file.name)
         if url:
             return redirect(url)
     return jsonify({"error": "File not found"}), 404
@@ -689,7 +699,7 @@ def download_chatbot_qna_file(id, file_id):
 
     file = Document.query.filter_by(id=file_id, chatbot_id=db_id, document_type='QNA').first()
     if file and file.file_path:
-        url = get_sas_url(file.file_path)
+        url = get_sas_url(file.file_path, filename=file.name)
         if url:
             return redirect(url)
     return jsonify({"error": "File not found"}), 404

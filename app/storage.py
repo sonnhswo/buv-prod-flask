@@ -34,17 +34,26 @@ def delete_blob(blob_path):
     except Exception as e:
         print(f"Error deleting blob: {e}")
 
-def get_sas_url(blob_path):
+def get_sas_url(blob_path, filename=None):
     if blob_service_client is None:
         return None
     try:
+        kwargs = {}
+        if filename:
+            if filename.lower().endswith('.pdf'):
+                kwargs['content_disposition'] = f'inline; filename="{filename}"'
+                kwargs['content_type'] = 'application/pdf'
+            else:
+                kwargs['content_disposition'] = f'attachment; filename="{filename}"'
+
         sas_token = generate_blob_sas(
             account_name=blob_service_client.account_name,
             container_name=container_name,
             blob_name=blob_path,
             account_key=blob_service_client.credential.account_key,
             permission=BlobSasPermissions(read=True),
-            expiry=datetime.now(timezone.utc) + timedelta(hours=1)
+            expiry=datetime.now(timezone.utc) + timedelta(hours=1),
+            **kwargs
         )
         blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_path)
         return f"{blob_client.url}?{sas_token}"
