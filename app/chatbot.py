@@ -41,6 +41,8 @@ def generate_response(user_input: str, session_id: str, chatbot_name: str) -> st
             
             conversational_rag_chain = create_conversational_rag_chain(doc_retriever, get_session_history)
             relevant_questions_chain = create_relevant_questions_chain(question_retriever)
+            
+            trim_message_history(session_id)
 
             qna_found = qna_retriever.invoke(user_input)
 
@@ -55,7 +57,6 @@ def generate_response(user_input: str, session_id: str, chatbot_name: str) -> st
             
             # QnA not found - proceed with normal workflow
             else:
-                trim_message_history(session_id)
                 output = conversational_chain(conversational_rag_chain, relevant_questions_chain, user_input, session_id)
                 
                 answer = output.get("answer")
