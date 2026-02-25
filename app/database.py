@@ -4,7 +4,7 @@ from langchain_core.documents import Document
 from typing import List
 from pydantic import Field
 
-from app.azure_clients.kb_clients import ai_search, phase1_ai_search
+from app.azure_clients.kb_clients import ai_search, phase1_ai_search, qna_ai_search
 from config import Config
 
 config = Config()
@@ -51,6 +51,38 @@ class AzureAISearchRetriever(BaseRetriever):
         for doc_obj, score in search_results_with_score:
             doc = Document(
                 page_content = doc_obj.metadata.get("document_chunk", "No content found"),
+                metadata     = { 
+                    "title": doc_obj.metadata.get("document_title"),
+                    "page_number": doc_obj.metadata.get("page_number"),
+                    "matched_question": doc_obj.page_content,
+                    "score": score
+                }
+            )
+            list_docs.append(doc)
+        
+        return list_docs
+    
+class QnARetriever(BaseRetriever):
+    chatbot: str = Field(..., description="Chatbot name for filtering")
+    k: int = Field(default=1, description="Number of documents to return")
+
+    def _get_relevant_documents(self, query: str) -> List[Document]:
+        print(f"[QNA RETRIEVER] Searching (k={self.k})")
+
+        # Retrieve k documents that passes the threshold
+        search_results_with_score = qna_ai_search.similarity_search_with_relevance_scores(
+            query = query,
+            k = self.k,
+            score_threshold = config.QNA_SIMILARITY_THRESHOLD,
+            filters = f"chatbot eq '{self.chatbot}'"
+        )
+
+        print(f"Found {len(search_results_with_score)} QnAs.")
+
+        list_docs = []
+        for doc_obj, score in search_results_with_score:
+            doc = Document(
+                page_content = doc_obj.metadata.get("expected_answer", "No content found"),
                 metadata     = { 
                     "title": doc_obj.metadata.get("document_title"),
                     "page_number": doc_obj.metadata.get("page_number"),

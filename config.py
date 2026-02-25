@@ -59,6 +59,8 @@ class Config:
     print(f"{FETCH_K = }")
     LAMBDA_MULT = float(os.getenv("LAMBDA_MULT"))
     print(f"{LAMBDA_MULT = }")
+    QNA_SIMILARITY_THRESHOLD = float(os.getenv("QNA_SIMILARITY_THRESHOLD"))
+    print(f"{QNA_SIMILARITY_THRESHOLD = }")
 
     STORAGE_URL = os.getenv("STORAGE_URL")
     print(f"{STORAGE_URL = }")
