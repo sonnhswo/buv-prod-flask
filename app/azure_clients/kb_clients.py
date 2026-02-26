@@ -86,7 +86,7 @@ ai_search = AzureSearch (
     azure_search_endpoint = config.AI_SEARCH_ENDPOINT,
     azure_search_key      = config.AI_SEARCH_KEY,
     index_name            = config.INDEX_NAME,
-    embedding_function    = text_embedding_3large.embed_query,
+    embedding_function    = text_embedding_3large,
     fields                = index_fields,
 )
 # phase 1 migrated knowledge base
