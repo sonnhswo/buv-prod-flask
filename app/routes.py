@@ -6,7 +6,7 @@ import queue
 from werkzeug.utils import secure_filename
 from flask import Blueprint, request, jsonify, Response, stream_with_context, redirect, send_file
 from sqlalchemy import create_engine
-from datetime import datetime
+from datetime import datetime, timezone
 import pandas as pd
 from io import BytesIO
 from app.chatbot import clear_history
@@ -377,11 +377,15 @@ def create_chatbot(current_user):
     except ValueError:
         return jsonify({"error": "Invalid date format"}), 400
 
+    is_active = True if data.get('status') == 'Active' else False
+    if publish_date and publish_date.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc):
+        is_active = False
+
     new_bot = Chatbot(
         name=data.get('name'),
         description=data.get('description'),
         publish_date=publish_date,
-        is_active=True if data.get('status') == 'Active' else False,
+        is_active=is_active,
         division=current_user.division
     )
     session.add(new_bot)
@@ -410,6 +414,9 @@ def update_chatbot(current_user, id):
 
     if data.get('status'):
         bot.is_active = True if data.get('status') == 'Active' else False
+
+    if bot.publish_date and bot.publish_date.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc):
+        bot.is_active = False
 
     bot.updated_at = db.func.now()
     session.commit()
@@ -729,7 +736,7 @@ def update_chatbot_status(current_user, id):
     # Adapted to uat_phase2 is_active field
     bot.is_active = True if data.get('status') == 'Active' else False
     if bot.is_active:
-        bot.publish_date = datetime.now()
+        bot.publish_date = datetime.now(timezone.utc)
     else:
         bot.publish_date = None
     session.commit()
