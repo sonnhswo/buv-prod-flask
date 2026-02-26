@@ -36,6 +36,7 @@ class DocumentIngestor :
         """
         self.chatbot_id = chatbot_id
         self.chatbot_name = chatbot_name
+        self.document_title = document_title
         self.document_path = document_path
         self.document_type = document_title.split('.')[-1]
 
@@ -393,7 +394,7 @@ class DocumentIngestor :
         and save it to the Knowledge Base of chatbot_name.
         """
         print(self.document_path)
-        print(self.chatbot)
+        print(self.chatbot_id)
         # 1. call blob storage
         doc_bytes = self.get_file_from_blob_storage()
 
