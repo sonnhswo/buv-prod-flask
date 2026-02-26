@@ -11,8 +11,9 @@ import json
 import re
 import io
 
-from app.azure_clients.kb_clients import doc_int_client, ai_search, qna_ai_search
+from app.azure_clients.kb_clients import doc_int_client, ai_search, phase1_ai_search, qna_ai_search
 from app.llm_models.chat_models import llm_fixer, llm_generator
+from app.database import phase1_chatbots
 from config import Config
 
 config = Config()
@@ -26,15 +27,15 @@ class ChunkQuestions(BaseModel):
 
 class DocumentIngestor :
 
-    def __init__(self, chatbot_id: str, document_title: str, document_path: str):
+    def __init__(self, chatbot_id: str, chatbot_name: str, document_title: str, document_path: str):
         """
         Class wrapper to handle document ingestion from Blob Storage to knowledge base on AI Search.
 
         chatbot_id : unique ID of chatbot.
         document_title : name of the document exactly as the one on blob storage (ex: "Student_Handbook_2025.pdf").
         """
-        self.chatbot = chatbot_id
-        self.document_title = document_title
+        self.chatbot_id = chatbot_id
+        self.chatbot_name = chatbot_name
         self.document_path = document_path
         self.document_type = document_title.split('.')[-1]
 
@@ -302,6 +303,8 @@ class DocumentIngestor :
         structured_llm = llm_generator.with_structured_output(ChunkQuestions)
         
         enhanced = []
+        
+        filter_value = self.chatbot_name if self.chatbot_name in phase1_chatbots else self.chatbot_id
 
         for i, chunk in enumerate(chunks):
             print(f"-- Processing chunk: {i}/{len(chunks)}", end="\r")
@@ -352,9 +355,9 @@ class DocumentIngestor :
                         page_content = q_text,
                         metadata = {
                             "document_title" : self.document_title,
-                            "chatbot"        : self.chatbot,
+                            "chatbot"        : filter_value,
                             "metadata"       : json.dumps({
-                                "chatbot"       : self.chatbot,
+                                "chatbot"       : filter_value,
                                 "document_title": self.document_title,
                                 "page_number"   : str(chunk.metadata.get("page_number")),
                                 "document_chunk": chunk.page_content
@@ -375,7 +378,8 @@ class DocumentIngestor :
         try :
             print(f"[UPLOAD TO AISEARCH] uploading {len(chunk_list)} docs to index.")
 
-            ai_search.add_documents(chunk_list)
+            knowledge_base = phase1_ai_search if self.chatbot_name in phase1_chatbots else ai_search
+            knowledge_base.add_documents(chunk_list)
 
             print(f"[UPLOAD TO AISEARCH] upload successful.")
         except Exception as e :
@@ -420,8 +424,9 @@ class DocumentIngestor :
 
 class QnAIngestor:
 
-    def __init__(self, chatbot_id: str, document_title: str, document_path: str):
-        self.chatbot = chatbot_id
+    def __init__(self, chatbot_id: str, chatbot_name: str, document_title: str, document_path: str):
+        self.chatbot_id = chatbot_id
+        self.chatbot_name = chatbot_name
         self.document_title = document_title
         self.document_path = document_path
 
@@ -453,6 +458,7 @@ class QnAIngestor:
     # ----------------------------------------------------------------------------------------------- #
 
     def upload_to_ai_search(self, qna_fd: pd.DataFrame) -> None:
+        filter_value = self.chatbot_name if self.chatbot_name in phase1_chatbots else self.chatbot_id
 
         qna_list = []
         for record in qna_fd.to_dict("records"):
@@ -460,9 +466,9 @@ class QnAIngestor:
                 page_content = record.get("Question"),
                 metadata = {
                     "qna_filename": self.document_title,
-                    "chatbot"     : self.chatbot,
+                    "chatbot"     : filter_value,
                     "metadata"    : json.dumps({
-                        "chatbot"        : self.chatbot,
+                        "chatbot"        : filter_value,
                         "document_title" : record.get("Source"),
                         "page_number"    : record.get("Page"),
                         "expected_answer": record.get("Expected answer")
@@ -484,20 +490,22 @@ class QnAIngestor:
         df = self.get_file_from_blob_storage()
         self.upload_to_ai_search(df)
 
-def process_file_ingestion(chatbot_id: str, document_type: str, document_title: str, document_path: str) -> None:
+def process_file_ingestion(chatbot_id: str, chatbot_name: str, document_type: str, document_title: str, document_path: str) -> None:
     """
     Helper function to route file ingestion based on document type.
     """
     if document_type == 'QNA':
         ingestor = QnAIngestor(
-            chatbot_id=chatbot_id, 
+            chatbot_id=chatbot_id,
+            chatbot_name=chatbot_name, 
             document_title=document_title, 
             document_path=document_path
         )
         ingestor.ingest_qna()
     else:
         ingestor = DocumentIngestor(
-            chatbot_id=chatbot_id, 
+            chatbot_id=chatbot_id,
+            chatbot_name=chatbot_name,
             document_title=document_title, 
             document_path=document_path
         )
