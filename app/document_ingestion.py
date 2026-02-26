@@ -8,6 +8,8 @@ from typing import Optional
 import pandas as pd
 import requests
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 import re
 import io
 
@@ -60,7 +62,7 @@ class DocumentIngestor :
             print(f"[CONVERT DOCX TO PDF] Converting {self.document_title} to PDF...")
             response = requests.post(config.DOCX_TO_PDF_API_URL, files=files, timeout=config.TIMEOUT)
             response.raise_for_status()
-
+            print(f"[CONVERT DOCX TO PDF] Completed converting {self.document_title} to PDF")
             return response.content
 
         except requests.exceptions.RequestException as e:
@@ -110,7 +112,6 @@ class DocumentIngestor :
         :return: the file content as bytes.
         :rtype: bytes | None
         """
-
         try:
             print(f"[GET FILE FROM BLOB] Starting {self.document_path} download...")
             blob_client = BlobClient(
@@ -120,12 +121,9 @@ class DocumentIngestor :
                 blob_name      = self.document_path
             )
             doc_bytes = blob_client.download_blob().readall()
-
-            print(f"[GET FILE FROM BLOB] read {len(doc_bytes)} bytes of {self.document_path} successfully.")
             return doc_bytes
 
         except Exception as e :
-            print(f"[GET FILE FROM BLOB] /!\ error \n{e}")
             return None
 
     # ----------------------------------------------------------------------------------------------- #
@@ -146,11 +144,9 @@ class DocumentIngestor :
                                                             body = file, 
                                                             output_content_format = "markdown" )
             result : AnalyzeResult = poller.result()
-            print(f"[EXTRACT FROM DOC] extracted {len(result.pages)} pages successfully.")    
             return result
         
         except Exception as e :
-            print(f"[EXTRACT FROM DOC] /!\ error \n{e}")
             return None
         
     # ----------------------------------------------------------------------------------------------- #
@@ -164,7 +160,6 @@ class DocumentIngestor :
         :return: A string containing the enhanced document, written in Markdown.
         :rtype: str
         """
-        print("[ENHANCE EXTRACTION] Enhancing extraction with LLM...")
 
         lcontent = result.content.split("<!-- PageBreak -->")
 
@@ -230,7 +225,6 @@ class DocumentIngestor :
             resp = llm_fixer.invoke(enhance_extraction_prompt)
             lenhanced.append(resp.content)
         
-        print("[ENHANCE EXTRACTION] Enhancing extraction successful.")
         return "\n".join(lenhanced)
  
     # ----------------------------------------------------------------------------------------------- #
@@ -259,6 +253,7 @@ class DocumentIngestor :
             # 2. Clean up the content by removing the markers
             chunk.page_content = self.PAGE_RE.sub("", chunk.page_content).strip()
         
+        print(f"[ATTACH PAGE METADATA] Completed attaching page metadata.")
         return chunks
 
     # ----------------------------------------------------------------------------------------------- #
@@ -281,44 +276,47 @@ class DocumentIngestor :
         )
 
         final_chunks = splitter.split_documents( [Document(page_content=text)] )
-
         print(f"[CHUNKING] Chunked document into {len(final_chunks)} chunks.")
 
         return self.attach_page_metadata(final_chunks)
 
     # ----------------------------------------------------------------------------------------------- #
 
-    def enrich_chunks(self, chunks: list[Document]) -> list[Document] :
+    def enrich_chunks(self, chunks: list[Document], max_workers: int = 5) -> list[Document] :
         """
-        Enrich chunks by generating 3 questions for each chunk using structured output. 
+        Enrich chunks by generating 3 questions for each chunk using structured output.
+        Chunks are processed in parallel using a thread pool.
 
         :param chunks: list of chunks
         :type chunks: list[Document]
+        :param max_workers: max concurrent LLM calls (tune based on your API rate limit)
+        :type max_workers: int
         :return: A list of chunks representing Question - Chunk pairs, that is ready for upload.
         :rtype: list[Document]
         """
-
         print(f"[Q&C PAIR] Started generating questions for {len(chunks)} chunks.")
-        
-        # Initialize structured LLM
+
+        # Initialize structured LLM (thread-safe: stateless HTTP client)
         structured_llm = llm_generator.with_structured_output(ChunkQuestions)
-        
-        enhanced = []
-        
+
         filter_value = self.chatbot_name if self.chatbot_name in phase1_chatbots else self.chatbot_id
 
-        for i, chunk in enumerate(chunks):
-            print(f"-- Processing chunk: {i}/{len(chunks)}", end="\r")
+        counter = 0
+        lock = threading.Lock()
+
+        def process_chunk(args):
+            nonlocal counter
+            i, chunk = args
 
             gen_questions_prompt = \
             f"""
             You are a versatile question-generation expert:
-            - Treat the input as a source of knowledge, not as an object to be summarized. 
-            - Never refer to the input format in your questions (e.g., avoid "What does this table say" or "What is in this paragraph"). 
+            - Treat the input as a source of knowledge, not as an object to be summarized.
+            - Never refer to the input format in your questions (e.g., avoid "What does this table say" or "What is in this paragraph").
             - Never include the original source text in your output.
             - Focus on the *subject matter*, not the *document structure*.
             - Generate questions that stand alone and make sense to a user who hasn't seen the source chunk.
-            
+
             Depending on the input type, your task is as follows:
             - If the input is already a question, your task is as follows:
                 1. Preserve the original question exactly as 'question1'.
@@ -335,22 +333,41 @@ class DocumentIngestor :
                 3. A question addressing potential applications, consequences, or related aspects.
 
             Please return the output in a Python dictionary format with the following keys: 'question1', 'question2', 'question3'.
-            
+
             Here is the input:
             {chunk.page_content}
             """
-            
-            # Pydantic structured output handles the parsing automatically
+
             output_questions = structured_llm.invoke(gen_questions_prompt)
 
-            # Accessing fields from the Pydantic model directly
-            questions = [
-                output_questions.question1,
-                output_questions.question2,
-                output_questions.question3
-            ]
+            with lock:
+                counter += 1
+                print(f"-- Processing chunk: {counter}/{len(chunks)}", end="\r")
 
-            for q_text in questions:
+            return i, chunk, output_questions
+
+        # Submit all chunks in parallel, preserving original order
+        results = [None] * len(chunks)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_index = {
+                executor.submit(process_chunk, (i, chunk)): i
+                for i, chunk in enumerate(chunks)
+            }
+            for future in as_completed(future_to_index):
+                i = future_to_index[future]
+                try:
+                    _, chunk, output_questions = future.result()
+                    results[i] = (chunk, output_questions)
+                except Exception as e:
+                    print(f"\n[Q&C PAIR] /!\\ Chunk {i} failed: {e}")
+
+        # Build final list in original chunk order
+        enhanced = []
+        for item in results:
+            if item is None:
+                continue
+            chunk, output_questions = item
+            for q_text in [output_questions.question1, output_questions.question2, output_questions.question3]:
                 enhanced.append(
                     Document(
                         page_content = q_text,
@@ -366,8 +383,6 @@ class DocumentIngestor :
                         }
                     )
                 )
-            
-        print(f"[Q&C PAIR] Generated {len(enhanced)} Q&C pairs.")   
         return enhanced
 
     # ----------------------------------------------------------------------------------------------- #
@@ -381,10 +396,8 @@ class DocumentIngestor :
 
             knowledge_base = phase1_ai_search if self.chatbot_name in phase1_chatbots else ai_search
             knowledge_base.add_documents(chunk_list)
-
-            print(f"[UPLOAD TO AISEARCH] upload successful.")
         except Exception as e :
-            print(f"[UPLOAD TO AISEARCH] Error: {e}")
+            print(f"[UPLOAD TO AISEARCH] Error uploading to AI Search: {e}")
 
     # =============================================================================================== #
 
@@ -448,7 +461,6 @@ class QnAIngestor:
             stream.seek(0)
             
             df = pd.read_excel(stream, engine='openpyxl')
-            
             print(f"[GET FILE FROM BLOB] Successfully loaded {len(df)} rows.")
             return df
             
@@ -480,7 +492,6 @@ class QnAIngestor:
         try :
             print(f"[UPLOAD TO AISEARCH] uploading {len(qna_list)} rows to index.")
             qna_ai_search.add_documents(qna_list)
-
             print(f"[UPLOAD TO AISEARCH] upload successful.")
         except Exception as e :
             print(f"[UPLOAD TO AISEARCH] Error: {e}")
