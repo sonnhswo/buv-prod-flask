@@ -140,9 +140,18 @@ def chat_stream(chatbot_id: int):
     if not chatbot:
         return jsonify({"error": "Chatbot not found"}), 404
 
-    ab_configs = config.AB_CONFIGS[chatbot.configuration['endpoint']]
-    except_keywords = ab_configs['except_keywords']
-    full_name = ab_configs['full_name']
+    ab_configs = None
+    if chatbot.configuration:
+        ab_configs = config.AB_CONFIGS.get(chatbot.configuration['endpoint'])
+    
+    # phase 1 bots
+    if ab_configs:
+        except_keywords = ab_configs['except_keywords']
+        full_name = ab_configs['full_name']
+    # phase 2 bots
+    else:
+        except_keywords = []
+        full_name = chatbot.name
 
     def generate():
         ask_relevant_question = True
@@ -461,7 +470,7 @@ def upload_chatbot_file(current_user, id):
         session.commit()
 
         try:
-            execute_safely(process_file_ingestion, str(chatbot.id), 'KNOWLEDGE_BASE', new_file.name, new_file.file_path)
+            execute_safely(process_file_ingestion, str(chatbot.id), chatbot.name, 'KNOWLEDGE_BASE', new_file.name, new_file.file_path)
         except Exception as e:
             execute_safely(delete_blob, blob_path)
             session.delete(new_file)
@@ -510,7 +519,7 @@ def ingest_chatbot_file(current_user, id, file_id):
     if file.document_type not in ['QNA','KNOWLEDGE_BASE'] :
         return jsonify({"error": "Unrecognized file document type"}), 400
     try:
-        execute_safely(process_file_ingestion, str(chatbot.id), file.document_type, file.name, file.file_path)
+        execute_safely(process_file_ingestion, str(chatbot.id), chatbot.name, file.document_type, file.name, file.file_path)
 
         return jsonify({"message": "Ingested"}), 200
 
@@ -590,7 +599,7 @@ def replace_chatbot_file(current_user, id, file_id):
         session.commit()
 
         try:
-            execute_safely(process_file_ingestion, str(chatbot.id), 'KNOWLEDGE_BASE', file_record.name, file_record.file_path)
+            execute_safely(process_file_ingestion, str(chatbot.id), chatbot.name, 'KNOWLEDGE_BASE', file_record.name, file_record.file_path)
         except Exception as e:
             return jsonify({"error": f"Failed to ingest file: \n\t{e}"}), 500
 
@@ -651,7 +660,7 @@ def add_chatbot_qna_file(current_user, id):
 
         chatbot = Chatbot.query.get(db_id)
         try:
-            execute_safely(process_file_ingestion, str(chatbot.id), 'QNA', new_file.name, new_file.file_path)
+            execute_safely(process_file_ingestion, str(chatbot.id), chatbot.name, 'QNA', new_file.name, new_file.file_path)
         except Exception as e:
             execute_safely(delete_blob, blob_path)
             session.delete(new_file)
@@ -680,7 +689,7 @@ def delete_chatbot_qna_file(current_user, id, file_id):
 
     try:
         if chatbot_name and file_name:
-            res = execute_safely(delete_qna, str(chatbot.id), file_name)
+            res = execute_safely(delete_qna, str(chatbot.id), chatbot_name, file_name)
             if res == -1:
                 raise Exception("Failed to delete QnA from KB")
         if file.file_path:

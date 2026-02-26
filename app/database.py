@@ -37,6 +37,8 @@ class AzureAISearchRetriever(BaseRetriever):
         print(f"[AI SEARCH RETRIEVER] Searching (k={self.k})")
 
         knowledge_base = ai_search if self.chatbot_name not in phase1_chatbots else phase1_ai_search
+        
+        filter_value = self.chatbot_name if self.chatbot_name in phase1_chatbots else self.chatbot
 
         # Use the MMR-specific method for diversity
         search_results_with_score = knowledge_base.max_marginal_relevance_search_with_score(
@@ -44,7 +46,7 @@ class AzureAISearchRetriever(BaseRetriever):
             k           = self.k,        # Uses the k passed during initialization (6 or 3)
             fetch_k     = config.FETCH_K,            # Candidates for diversity processing
             lambda_mult = config.LAMBDA_MULT,           # Balanced diversity/relevance
-            filters     = f"chatbot eq '{self.chatbot}'" 
+            filters     = f"chatbot eq '{filter_value}'" 
         )
         print(f"Found {len(search_results_with_score)} documents.")
 
@@ -65,17 +67,20 @@ class AzureAISearchRetriever(BaseRetriever):
 
 class QnARetriever(BaseRetriever):
     chatbot: str = Field(..., description="Chatbot id for filtering")
+    chatbot_name: str = Field(..., description="Chatbot name for legacy checking")
     k: int = Field(default=1, description="Number of documents to return")
 
     def _get_relevant_documents(self, query: str) -> List[Document]:
         print(f"[QNA RETRIEVER] Searching (k={self.k})")
+        
+        filter_value = self.chatbot_name if self.chatbot_name in phase1_chatbots else self.chatbot
 
         # Retrieve k documents that passes the threshold
         search_results_with_score = qna_ai_search.similarity_search_with_relevance_scores(
             query = query,
             k = self.k,
             score_threshold = config.QNA_SIMILARITY_THRESHOLD,
-            filters = f"chatbot eq '{self.chatbot}'"
+            filters = f"chatbot eq '{filter_value}'"
         )
 
         print(f"Found {len(search_results_with_score)} QnAs.")
@@ -95,23 +100,29 @@ class QnARetriever(BaseRetriever):
 
         return list_docs
 
-def delete_qna(chatbot_id: str, document_name: str) -> int: 
+def delete_qna(chatbot_id: str, chatbot_name: str, document_name: str) -> int: 
     """
     Delete the QnA file from knowledge base.
 
     :param chatbot_id: the ID of the chatbot that owns this QnA file.
     :type chatbot_id: str
+    :param chatbot_name: the name of the chatbot for legacy checking.
+    :type chatbot_name: str
     :param document_name: the name of the QnA file (exactly as Document.name in PostgresDb).
     :type document_name: str
     :return: the number of rows successfully deleted, -1 in the case of failure.
     :rtype: int    
     """
     try: 
-        print(f"[DELETING QNA] starting deletion for {document_name}, of bot {chatbot_id}")
+        print(f"[DELETING QNA] starting deletion for {document_name}, of bot {chatbot_name}")
+        
+        # Select the right field value to filter by
+        filter_value = chatbot_name if chatbot_name in phase1_chatbots else chatbot_id
+        
         docs_to_delete = qna_ai_search.client.search(
             "*",
             select = ["id"],
-            filter = f"chatbot eq '{chatbot_id}' and qna_filename eq '{document_name}'"
+            filter = f"chatbot eq '{filter_value}' and qna_filename eq '{document_name}'"
         )
         ids_to_delete = [ doc.get("id") for doc in docs_to_delete ]
 
@@ -139,10 +150,11 @@ def delete_doc_from_kb(chatbot_id: str, chatbot_name: str, document_name: str) -
         print(f"[DELETING DOC] starting deletion for {document_name}, of bot {chatbot_name}")
 
         knowledge_base = ai_search if chatbot_name not in phase1_chatbots else phase1_ai_search
+        filter_value = chatbot_name if chatbot_name in phase1_chatbots else chatbot_id
         docs_to_delete = knowledge_base.client.search(
             "*",
             select = ["id"],
-            filter = f"chatbot eq '{chatbot_id}' and document_title eq '{document_name}'"
+            filter = f"chatbot eq '{filter_value}' and document_title eq '{document_name}'"
         )
         ids_to_delete = [ doc.get("id") for doc in docs_to_delete ]
 
