@@ -65,6 +65,53 @@ class AzureAISearchRetriever(BaseRetriever):
         
         return list_docs
 
+class QuestionRetriever(BaseRetriever):
+    chatbot: str = Field(..., description="Chatbot id for filtering")
+    chatbot_name: str = Field(..., description="Chatbot name for legacy checking")
+    k: int = Field(default=3, description="Number of questions to return")
+
+    def _get_relevant_documents(self, query: str) -> List[Document]:
+        print(f"[QUESTION RETRIEVER] Searching (k={self.k})")
+
+        knowledge_base = ai_search if self.chatbot_name not in phase1_chatbots else phase1_ai_search
+        filter_value = self.chatbot_name if self.chatbot_name in phase1_chatbots else self.chatbot
+
+        search_results = ai_search.similarity_search(
+            query       = query,
+            k           = config.QUESTION_TOP_K,
+            search_type = "similarity",
+            filters     = f"chatbot eq '{self.chatbot}'" 
+        )
+        print(f"[QUESTION RETRIEVER] Found {len(search_results)} documents.")
+
+        # Fallback: top up with arbitrary docs 
+        if len(search_results) < self.k:
+
+            shortfall = self.k - len(search_results)
+            print(f"[QUESTION RETRIEVER][WARN] Short by {shortfall}, pulling arbitrary docs...")
+
+            fallback_results = knowledge_base.similarity_search_with_score(
+                query   = "",
+                k       = shortfall,        
+                filters = f"chatbot eq '{filter_value}'"
+            )
+            for doc in fallback_results:
+                search_results.append(doc)
+
+        list_docs = []
+        for doc_obj in search_results:
+            doc = Document(
+                page_content = doc_obj.metadata.get("document_chunk", "No content found"),
+                metadata     = {
+                    "title":            doc_obj.metadata.get("document_title"),
+                    "page_number":      doc_obj.metadata.get("page_number"),
+                    "matched_question": doc_obj.page_content
+                }
+            )
+            list_docs.append(doc)
+
+        return list_docs
+    
 class QnARetriever(BaseRetriever):
     chatbot: str = Field(..., description="Chatbot id for filtering")
     chatbot_name: str = Field(..., description="Chatbot name for legacy checking")
