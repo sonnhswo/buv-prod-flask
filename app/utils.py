@@ -96,6 +96,3 @@ def add_prefix_to_answer(answer, uni_name):
         return "**For US students:**\n\n" + answer
             
     return answer
-
-class RelevantQuestionsOutput(BaseModel):
-    questions: list[str] = Field(default=[], description="Questions after reformated to keep only the English part", min_length=3, max_length=3)

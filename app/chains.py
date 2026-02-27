@@ -12,7 +12,7 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_openai import AzureChatOpenAI
 
-from .utils import FormatedOutput, stringify_formatted_answer, extract_formatted_answer, RelevantQuestionsOutput
+from .utils import FormatedOutput, stringify_formatted_answer, extract_formatted_answer
 from .prompt_templates import contextualized_template, system_template, relevant_question_template
 
 def create_stuff_documents_chain(llm: AzureChatOpenAI, 
@@ -52,7 +52,7 @@ def create_relevant_questions_chain(retriever):
     def get_content_only(doc_list):
         print(f"RELEVANT QUESTIONS: {[doc.metadata.get('matched_question') for doc in doc_list]}")
         return [doc.metadata.get("matched_question") for doc in doc_list]
-    chain = retriever | get_content_only | RunnablePassthrough(lambda x: {"questions": x}) | azure_openai.with_structured_output(RelevantQuestionsOutput)
+    chain = retriever | get_content_only 
     return chain
 
 def conversational_chain(conversational_rag_chain, relevant_questions_chain, query: str, session_id: str) -> dict:
@@ -66,7 +66,7 @@ def conversational_chain(conversational_rag_chain, relevant_questions_chain, que
     )
     relevant_questions = relevant_questions_chain.invoke(str(response['context']))
     output = extract_formatted_answer(response['answer'])
-    output['relevant_questions'] = relevant_questions.questions
+    output['relevant_questions'] = relevant_questions
     return output
 
 
@@ -100,6 +100,6 @@ def conversational_chain_stream(conversational_rag_chain, relevant_questions_cha
     
     # Get and send relevant questions
     relevant_questions = relevant_questions_chain.invoke(str(response['context']))
-    yield {'type': 'questions', 'relevant_questions': relevant_questions.questions}
+    yield {'type': 'questions', 'relevant_questions': relevant_questions}
     
     yield {'type': 'done'}
