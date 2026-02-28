@@ -76,11 +76,11 @@ class QuestionRetriever(BaseRetriever):
         knowledge_base = ai_search if self.chatbot_name not in phase1_chatbots else phase1_ai_search
         filter_value = self.chatbot_name if self.chatbot_name in phase1_chatbots else self.chatbot
 
-        search_results = ai_search.similarity_search(
+        search_results = knowledge_base.similarity_search(
             query       = query,
             k           = config.QUESTION_TOP_K,
             search_type = "similarity",
-            filters     = f"chatbot eq '{self.chatbot}'" 
+            filters     = f"chatbot eq '{filter_value}'" 
         )
         print(f"[QUESTION RETRIEVER] Found {len(search_results)} documents.")
 
@@ -90,11 +90,12 @@ class QuestionRetriever(BaseRetriever):
             shortfall = self.k - len(search_results)
             print(f"[QUESTION RETRIEVER][WARN] Short by {shortfall}, pulling arbitrary docs...")
 
-            fallback_results = knowledge_base.similarity_search_with_score(
-                query   = "",
-                k       = shortfall,        
-                filters = f"chatbot eq '{filter_value}'"
-            )
+            fallback_results = knowledge_base.similarity_search(
+            query       = "",
+            k           = config.QUESTION_TOP_K,
+            search_type = "similarity",
+            filters     = f"chatbot eq '{filter_value}'" 
+        )
             for doc in fallback_results:
                 search_results.append(doc)
 
