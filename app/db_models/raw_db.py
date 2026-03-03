@@ -108,3 +108,17 @@ class ChatMessage(db.Model):
     source = Column(JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), default=func.now(), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), default=func.now(), onupdate=func.now(), nullable=True)
+
+class IngestionTask(db.Model):
+    __tablename__ = 'ingestion_task'
+
+    id = Column(Integer, primary_key=True)
+    chatbot_id = Column(Integer, ForeignKey('chatbot.id'), nullable=False)
+    document_id = Column(Integer, ForeignKey('document.id'), nullable=True)
+    status = Column(String(50), nullable=False, default='PENDING')  # 'PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=True)
+
+    # Relationships
+    document = db.relationship('Document', backref='ingestion_tasks', lazy=True)
