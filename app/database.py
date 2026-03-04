@@ -4,7 +4,7 @@ from langchain_core.documents import Document
 from typing import List
 from pydantic import Field
 
-from app.azure_clients.kb_clients import ai_search, phase1_ai_search, qna_ai_search
+from app.azure_clients.kb_clients import get_ai_search, get_phase1_ai_search, get_qna_ai_search
 from config import Config
 
 config = Config()
@@ -36,8 +36,8 @@ class AzureAISearchRetriever(BaseRetriever):
     def _get_relevant_documents(self, query: str) -> List[Document]:
         print(f"[AI SEARCH RETRIEVER] Searching (k={self.k})")
 
-        knowledge_base = ai_search if self.chatbot_name not in phase1_chatbots else phase1_ai_search
-        
+        knowledge_base = get_ai_search() if self.chatbot_name not in phase1_chatbots else get_phase1_ai_search()
+
         filter_value = self.chatbot_name if self.chatbot_name in phase1_chatbots else self.chatbot
 
         # Use the MMR-specific method for diversity
@@ -73,7 +73,7 @@ class QuestionRetriever(BaseRetriever):
     def _get_relevant_documents(self, query: str) -> List[Document]:
         print(f"[QUESTION RETRIEVER] Searching (k={self.k})")
 
-        knowledge_base = ai_search if self.chatbot_name not in phase1_chatbots else phase1_ai_search
+        knowledge_base = get_ai_search() if self.chatbot_name not in phase1_chatbots else get_phase1_ai_search()
         filter_value = self.chatbot_name if self.chatbot_name in phase1_chatbots else self.chatbot
 
         search_results = knowledge_base.similarity_search(
@@ -124,7 +124,7 @@ class QnARetriever(BaseRetriever):
         filter_value = self.chatbot_name if self.chatbot_name in phase1_chatbots else self.chatbot
 
         # Retrieve k documents that passes the threshold
-        search_results_with_score = qna_ai_search.similarity_search_with_relevance_scores(
+        search_results_with_score = get_qna_ai_search().similarity_search_with_relevance_scores(
             query = query,
             k = self.k,
             score_threshold = config.QNA_SIMILARITY_THRESHOLD,
@@ -167,7 +167,7 @@ def delete_qna(chatbot_id: str, chatbot_name: str, document_name: str) -> int:
         # Select the right field value to filter by
         filter_value = chatbot_name if chatbot_name in phase1_chatbots else chatbot_id
         
-        docs_to_delete = qna_ai_search.client.search(
+        docs_to_delete = get_qna_ai_search().client.search(
             "*",
             select = ["id"],
             filter = f"chatbot eq '{filter_value}' and qna_filename eq '{document_name}'"
@@ -175,7 +175,7 @@ def delete_qna(chatbot_id: str, chatbot_name: str, document_name: str) -> int:
         ids_to_delete = [ doc.get("id") for doc in docs_to_delete ]
 
         nb_rows_deleted = len(ids_to_delete)
-        qna_ai_search.delete(ids_to_delete)
+        get_qna_ai_search().delete(ids_to_delete)
         
         print(f"[DELETING QNA] deleted {nb_rows_deleted} rows successfully")
         return nb_rows_deleted
@@ -197,7 +197,7 @@ def delete_doc_from_kb(chatbot_id: str, chatbot_name: str, document_name: str) -
     try: 
         print(f"[DELETING DOC] starting deletion for {document_name}, of bot {chatbot_name}")
 
-        knowledge_base = ai_search if chatbot_name not in phase1_chatbots else phase1_ai_search
+        knowledge_base = get_ai_search() if chatbot_name not in phase1_chatbots else get_phase1_ai_search()
         filter_value = chatbot_name if chatbot_name in phase1_chatbots else chatbot_id
         docs_to_delete = knowledge_base.client.search(
             "*",
