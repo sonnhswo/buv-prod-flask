@@ -30,6 +30,11 @@ question_suggest_blueprint = Blueprint('question_suggest', __name__)
 user_portal_blueprint = Blueprint('user_portal', __name__)
 admin_portal_blueprint = Blueprint('admin_portal', __name__)
 
+@chatbot_blueprint.route('/health', methods=['GET'])
+def health():
+    return jsonify({"status": "ok"}), 200
+
+
 def execute_safely(func, *args, **kwargs):
     q = queue.Queue()
     def wrapper():
