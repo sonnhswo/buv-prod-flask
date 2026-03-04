@@ -1,5 +1,6 @@
 # Flask core
 Flask==3.0.3
+gunicorn==22.0.0
 Flask-Cors==5.0.0
 Flask-Migrate==4.0.7
 Flask-SQLAlchemy==3.1.1
@@ -29,6 +30,7 @@ langsmith==0.1.93
 
 # OpenAI
 openai==1.37.1
+httpx==0.27.0
 
 # Data processing
 pandas==2.2.2
