@@ -44,7 +44,7 @@ class Chatbot(db.Model):
     __tablename__ = 'chatbot'
 
     id = Column(Integer, primary_key=True)
-    name = Column(String(255), unique=True, nullable=False)
+    name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     database_name = Column(String(255), nullable=True)
     attachments = Column(JSONB, nullable=True)

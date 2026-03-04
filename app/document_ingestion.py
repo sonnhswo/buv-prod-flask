@@ -13,7 +13,7 @@ import threading
 import re
 import io
 
-from app.azure_clients.kb_clients import doc_int_client, ai_search, phase1_ai_search, qna_ai_search
+from app.azure_clients.kb_clients import get_doc_int_client, get_ai_search, get_phase1_ai_search, get_qna_ai_search
 from app.llm_models.chat_models import llm_fixer, llm_generator
 from app.database import phase1_chatbots
 from config import Config
@@ -140,7 +140,7 @@ class DocumentIngestor :
         try :
             print("[EXTRACT FROM DOC] Starting extraction...")
         
-            poller = doc_int_client.begin_analyze_document( "prebuilt-layout", 
+            poller = get_doc_int_client().begin_analyze_document( "prebuilt-layout",
                                                             body = file, 
                                                             output_content_format = "markdown" )
             result : AnalyzeResult = poller.result()
@@ -394,7 +394,7 @@ class DocumentIngestor :
         try :
             print(f"[UPLOAD TO AISEARCH] uploading {len(chunk_list)} docs to index.")
 
-            knowledge_base = phase1_ai_search if self.chatbot_name in phase1_chatbots else ai_search
+            knowledge_base = get_phase1_ai_search() if self.chatbot_name in phase1_chatbots else get_ai_search()
             knowledge_base.add_documents(chunk_list)
         except Exception as e :
             print(f"[UPLOAD TO AISEARCH] Error uploading to AI Search: {e}")
@@ -491,7 +491,7 @@ class QnAIngestor:
             qna_list.append(qna_doc)
         try :
             print(f"[UPLOAD TO AISEARCH] uploading {len(qna_list)} rows to index.")
-            qna_ai_search.add_documents(qna_list)
+            get_qna_ai_search().add_documents(qna_list)
             print(f"[UPLOAD TO AISEARCH] upload successful.")
         except Exception as e :
             print(f"[UPLOAD TO AISEARCH] Error: {e}")
