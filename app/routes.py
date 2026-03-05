@@ -327,6 +327,8 @@ def get_chatbot_detail(chatbot_id):
 @user_portal_blueprint.route('/chatbots/<int:chatbot_id>/files/<string:filename>/download', methods=['GET'])
 def download_chatbot_file_by_name(chatbot_id, filename):
     file = Document.query.filter_by(name=filename, chatbot_id=chatbot_id).first()
+    if not file:
+        file = Document.query.filter_by(name=secure_filename(filename), chatbot_id=chatbot_id).first()
     if file and file.file_path:
         url = get_sas_url(file.file_path, filename=file.name)
         if url:
