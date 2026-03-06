@@ -53,8 +53,8 @@ def generate_response(user_input: str, session_id: str, chatbot_id: str, chatbot
                 answer = qna_found[0].page_content
                 source = qna_found[0].metadata.get("title")
                 page_number = qna_found[0].metadata.get("page_number")
-                relevant_questions = questions_found.questions
-            
+                relevant_questions = questions_found
+
             # QnA not found - proceed with normal workflow
             else:
                 output = conversational_chain(conversational_rag_chain, relevant_questions_chain, user_input, session_id)
@@ -83,6 +83,14 @@ def generate_response(user_input: str, session_id: str, chatbot_id: str, chatbot
         }
     except Exception as e:
         print(e)
+        standard_message = "For further assistance, please contact our Student Information Office via email at studentservice@buv.edu.vn or by phone at 0936 376 136."
+
+        return {
+            "answer": add_prefix_to_answer(standard_message, chatbot_name),
+            "source": None,
+            "page_number": None,
+            "relevant_questions": []
+        }
 
 
 def generate_response_stream(user_input: str, session_id: str, chatbot_id: str, uni_name: str):
@@ -123,12 +131,12 @@ def generate_response_stream(user_input: str, session_id: str, chatbot_id: str, 
                         yield {'type': 'content', 'content': word}
                     else:
                         yield {'type': 'content', 'content': ' ' + word}
-                
+
                 # Yield metadata, questions, and done signal
                 yield {'type': 'metadata', 'source': qna_found[0].metadata.get("title"), 'page_number': qna_found[0].metadata.get("page_number")}
-                yield {'type': 'questions', 'relevant_questions': questions_found.questions}
+                yield {'type': 'questions', 'relevant_questions': questions_found}
                 yield {'type': 'done'}
-                
+
             # 2. QnA not found - proceed with standard RAG stream
             else:
                 doc_retriever = AzureAISearchRetriever(chatbot=chatbot_id, chatbot_name=uni_name, k=config.DOC_TOP_K)

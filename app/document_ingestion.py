@@ -458,8 +458,9 @@ class QnAIngestor:
             stream = io.BytesIO()
             blob_client.download_blob().readinto(stream)
             stream.seek(0)
-            
+
             df = pd.read_excel(stream, engine='openpyxl')
+            df = df.where(pd.notna(df), None)
             print(f"[GET FILE FROM BLOB] Successfully loaded {len(df)} rows.")
             return df
             

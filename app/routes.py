@@ -6,7 +6,7 @@ import queue
 from werkzeug.utils import secure_filename
 from flask import Blueprint, request, jsonify, Response, stream_with_context, redirect, send_file
 from sqlalchemy import create_engine
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import pandas as pd
 from io import BytesIO
 from app.chatbot import clear_history
@@ -327,6 +327,8 @@ def get_chatbot_detail(chatbot_id):
 @user_portal_blueprint.route('/chatbots/<int:chatbot_id>/files/<string:filename>/download', methods=['GET'])
 def download_chatbot_file_by_name(chatbot_id, filename):
     file = Document.query.filter_by(name=filename, chatbot_id=chatbot_id).first()
+    if not file:
+        file = Document.query.filter_by(name=secure_filename(filename), chatbot_id=chatbot_id).first()
     if file and file.file_path:
         url = get_sas_url(file.file_path, filename=file.name)
         if url:
@@ -467,6 +469,11 @@ def upload_chatbot_file(current_user, id):
     file.seek(0)
 
     filename = secure_filename(file.filename)
+
+    existing_file = Document.query.filter_by(chatbot_id=db_id, name=filename).first()
+    if existing_file:
+        return jsonify({"error": f"A file named {filename} already existed"}), 400
+
     blob_path = f"chatbots/{db_id}/files/{filename}"
 
     if execute_safely(upload_blob, file, blob_path):
@@ -593,6 +600,10 @@ def replace_chatbot_file(current_user, id, file_id):
 
     filename = secure_filename(file.filename)
 
+    existing_file = Document.query.filter(Document.chatbot_id==db_id, Document.name==filename, Document.id!=file_id).first()
+    if existing_file:
+        return jsonify({"error": f"A file named {filename} already existed"}), 400
+
     chatbot = Chatbot.query.get(db_id)
     if chatbot and file_record.name:
         res = execute_safely(delete_doc_from_kb, str(chatbot.id), chatbot.name, file_record.name)
@@ -663,6 +674,11 @@ def add_chatbot_qna_file(current_user, id):
         return jsonify({"error": "No selected file"}), 400
 
     filename = secure_filename(file.filename)
+
+    existing_file = Document.query.filter_by(chatbot_id=db_id, name=filename).first()
+    if existing_file:
+        return jsonify({"error": f"A file named {filename} already existed"}), 400
+
     blob_path = f"chatbots/{db_id}/qna/{filename}"
 
     if execute_safely(upload_blob, file, blob_path):
@@ -753,6 +769,7 @@ def export_logs(current_user):
     chatbot_id = request.args.get('chatbot_id')
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
+    tz_offset = request.args.get('tz_offset', default=0, type=int)
 
     try:
         start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
@@ -786,7 +803,7 @@ def export_logs(current_user):
         if pending and pending['session_id'] != sess.id:
             rows.append({
                 "Question": pending['msg'].message, "Answer": "", "Thumb up/thumb down": 0,
-                "Chatbot name": pending['bot_name'], "Timestamp": pending['msg'].created_at.strftime("%H:%M:%S %d-%m-%Y")
+                "Chatbot name": pending['bot_name'], "Timestamp": (pending['msg'].created_at - timedelta(minutes=tz_offset)).strftime("%H:%M:%S %d-%m-%Y")
             })
             pending = None
 
@@ -794,21 +811,21 @@ def export_logs(current_user):
             if pending:
                 rows.append({
                     "Question": pending['msg'].message, "Answer": "", "Thumb up/thumb down": 0,
-                    "Chatbot name": pending['bot_name'], "Timestamp": pending['msg'].created_at.strftime("%H:%M:%S %d-%m-%Y")
+                    "Chatbot name": pending['bot_name'], "Timestamp": (pending['msg'].created_at - timedelta(minutes=tz_offset)).strftime("%H:%M:%S %d-%m-%Y")
                 })
             pending = {'msg': msg, 'session_id': sess.id, 'bot_name': bot.name}
         else:
             if pending:
                 rows.append({
                     "Question": pending['msg'].message, "Answer": msg.message, "Thumb up/thumb down": msg.like or 0,
-                    "Chatbot name": pending['bot_name'], "Timestamp": pending['msg'].created_at.strftime("%H:%M:%S %d-%m-%Y")
+                    "Chatbot name": pending['bot_name'], "Timestamp": (pending['msg'].created_at - timedelta(minutes=tz_offset)).strftime("%H:%M:%S %d-%m-%Y")
                 })
                 pending = None
 
     if pending:
         rows.append({
             "Question": pending['msg'].message, "Answer": "", "Thumb up/thumb down": 0,
-            "Chatbot name": pending['bot_name'], "Timestamp": pending['msg'].created_at.strftime("%H:%M:%S %d-%m-%Y")
+            "Chatbot name": pending['bot_name'], "Timestamp": (pending['msg'].created_at - timedelta(minutes=tz_offset)).strftime("%H:%M:%S %d-%m-%Y")
         })
 
     df = pd.DataFrame(rows)
