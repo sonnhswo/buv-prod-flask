@@ -469,6 +469,11 @@ def upload_chatbot_file(current_user, id):
     file.seek(0)
 
     filename = secure_filename(file.filename)
+
+    existing_file = Document.query.filter_by(chatbot_id=db_id, name=filename).first()
+    if existing_file:
+        return jsonify({"error": f"A file named {filename} already existed"}), 400
+
     blob_path = f"chatbots/{db_id}/files/{filename}"
 
     if execute_safely(upload_blob, file, blob_path):
@@ -595,6 +600,10 @@ def replace_chatbot_file(current_user, id, file_id):
 
     filename = secure_filename(file.filename)
 
+    existing_file = Document.query.filter(Document.chatbot_id==db_id, Document.name==filename, Document.id!=file_id).first()
+    if existing_file:
+        return jsonify({"error": f"A file named {filename} already existed"}), 400
+
     chatbot = Chatbot.query.get(db_id)
     if chatbot and file_record.name:
         res = execute_safely(delete_doc_from_kb, str(chatbot.id), chatbot.name, file_record.name)
@@ -665,6 +674,11 @@ def add_chatbot_qna_file(current_user, id):
         return jsonify({"error": "No selected file"}), 400
 
     filename = secure_filename(file.filename)
+
+    existing_file = Document.query.filter_by(chatbot_id=db_id, name=filename).first()
+    if existing_file:
+        return jsonify({"error": f"A file named {filename} already existed"}), 400
+
     blob_path = f"chatbots/{db_id}/qna/{filename}"
 
     if execute_safely(upload_blob, file, blob_path):
