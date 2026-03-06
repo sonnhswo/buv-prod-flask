@@ -1,3 +1,4 @@
+import math
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.documents import Document
 
@@ -52,11 +53,18 @@ class AzureAISearchRetriever(BaseRetriever):
 
         list_docs = []
         for doc_obj, score in search_results_with_score:
+            title = doc_obj.metadata.get("document_title")
+            page_number = doc_obj.metadata.get("page_number")
+            if isinstance(title, float) and math.isnan(title): title = None
+            elif str(title).lower() == "nan": title = None
+            if isinstance(page_number, float) and math.isnan(page_number): page_number = None
+            elif str(page_number).lower() == "nan": page_number = None
+
             doc = Document(
                 page_content = doc_obj.metadata.get("document_chunk", "No content found"),
                 metadata     = { 
-                    "title": doc_obj.metadata.get("document_title"),
-                    "page_number": doc_obj.metadata.get("page_number"),
+                    "title": title,
+                    "page_number": page_number,
                     "matched_question": doc_obj.page_content,
                     "score": score
                 }
@@ -101,11 +109,18 @@ class QuestionRetriever(BaseRetriever):
 
         list_docs = []
         for doc_obj in search_results:
+            title = doc_obj.metadata.get("document_title")
+            page_number = doc_obj.metadata.get("page_number")
+            if isinstance(title, float) and math.isnan(title): title = None
+            elif str(title).lower() == "nan": title = None
+            if isinstance(page_number, float) and math.isnan(page_number): page_number = None
+            elif str(page_number).lower() == "nan": page_number = None
+
             doc = Document(
                 page_content = doc_obj.metadata.get("document_chunk", "No content found"),
                 metadata     = {
-                    "title":            doc_obj.metadata.get("document_title"),
-                    "page_number":      doc_obj.metadata.get("page_number"),
+                    "title":            title,
+                    "page_number":      page_number,
                     "matched_question": doc_obj.page_content
                 }
             )
@@ -135,11 +150,18 @@ class QnARetriever(BaseRetriever):
 
         list_docs = []
         for doc_obj, score in search_results_with_score:
+            title = doc_obj.metadata.get("document_title")
+            page_number = doc_obj.metadata.get("page_number")
+            if isinstance(title, float) and math.isnan(title): title = None
+            elif str(title).lower() == "nan": title = None
+            if isinstance(page_number, float) and math.isnan(page_number): page_number = None
+            elif str(page_number).lower() == "nan": page_number = None
+
             doc = Document(
                 page_content = doc_obj.metadata.get("expected_answer", "No content found"),
                 metadata     = { 
-                    "title": doc_obj.metadata.get("document_title"),
-                    "page_number": doc_obj.metadata.get("page_number"),
+                    "title": title,
+                    "page_number": page_number,
                     "matched_question": doc_obj.page_content,
                     "score": score
                 }
