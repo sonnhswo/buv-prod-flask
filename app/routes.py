@@ -6,7 +6,7 @@ import queue
 from werkzeug.utils import secure_filename
 from flask import Blueprint, request, jsonify, Response, stream_with_context, redirect, send_file
 from sqlalchemy import create_engine
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import pandas as pd
 from io import BytesIO
 from app.chatbot import clear_history
@@ -769,6 +769,7 @@ def export_logs(current_user):
     chatbot_id = request.args.get('chatbot_id')
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
+    tz_offset = request.args.get('tz_offset', default=0, type=int)
 
     try:
         start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
@@ -802,7 +803,7 @@ def export_logs(current_user):
         if pending and pending['session_id'] != sess.id:
             rows.append({
                 "Question": pending['msg'].message, "Answer": "", "Thumb up/thumb down": 0,
-                "Chatbot name": pending['bot_name'], "Timestamp": pending['msg'].created_at.strftime("%H:%M:%S %d-%m-%Y")
+                "Chatbot name": pending['bot_name'], "Timestamp": (pending['msg'].created_at - timedelta(minutes=tz_offset)).strftime("%H:%M:%S %d-%m-%Y")
             })
             pending = None
 
@@ -810,21 +811,21 @@ def export_logs(current_user):
             if pending:
                 rows.append({
                     "Question": pending['msg'].message, "Answer": "", "Thumb up/thumb down": 0,
-                    "Chatbot name": pending['bot_name'], "Timestamp": pending['msg'].created_at.strftime("%H:%M:%S %d-%m-%Y")
+                    "Chatbot name": pending['bot_name'], "Timestamp": (pending['msg'].created_at - timedelta(minutes=tz_offset)).strftime("%H:%M:%S %d-%m-%Y")
                 })
             pending = {'msg': msg, 'session_id': sess.id, 'bot_name': bot.name}
         else:
             if pending:
                 rows.append({
                     "Question": pending['msg'].message, "Answer": msg.message, "Thumb up/thumb down": msg.like or 0,
-                    "Chatbot name": pending['bot_name'], "Timestamp": pending['msg'].created_at.strftime("%H:%M:%S %d-%m-%Y")
+                    "Chatbot name": pending['bot_name'], "Timestamp": (pending['msg'].created_at - timedelta(minutes=tz_offset)).strftime("%H:%M:%S %d-%m-%Y")
                 })
                 pending = None
 
     if pending:
         rows.append({
             "Question": pending['msg'].message, "Answer": "", "Thumb up/thumb down": 0,
-            "Chatbot name": pending['bot_name'], "Timestamp": pending['msg'].created_at.strftime("%H:%M:%S %d-%m-%Y")
+            "Chatbot name": pending['bot_name'], "Timestamp": (pending['msg'].created_at - timedelta(minutes=tz_offset)).strftime("%H:%M:%S %d-%m-%Y")
         })
 
     df = pd.DataFrame(rows)
