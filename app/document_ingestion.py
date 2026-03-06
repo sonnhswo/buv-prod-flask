@@ -13,9 +13,8 @@ import threading
 import re
 import io
 
-from app.azure_clients.kb_clients import get_doc_int_client, get_ai_search, get_phase1_ai_search, get_qna_ai_search
+from app.azure_clients.kb_clients import get_doc_int_client, get_ai_search, get_qna_ai_search
 from app.llm_models.chat_models import llm_fixer, llm_generator
-from app.database import phase1_chatbots
 from config import Config
 
 config = Config()
@@ -299,7 +298,7 @@ class DocumentIngestor :
         # Initialize structured LLM (thread-safe: stateless HTTP client)
         structured_llm = llm_generator.with_structured_output(ChunkQuestions)
 
-        filter_value = self.chatbot_name if self.chatbot_name in phase1_chatbots else self.chatbot_id
+        filter_value = self.chatbot_id
 
         counter = 0
         lock = threading.Lock()
@@ -394,7 +393,7 @@ class DocumentIngestor :
         try :
             print(f"[UPLOAD TO AISEARCH] uploading {len(chunk_list)} docs to index.")
 
-            knowledge_base = get_phase1_ai_search() if self.chatbot_name in phase1_chatbots else get_ai_search()
+            knowledge_base = get_ai_search()
             knowledge_base.add_documents(chunk_list)
         except Exception as e :
             print(f"[UPLOAD TO AISEARCH] Error uploading to AI Search: {e}")
@@ -471,7 +470,7 @@ class QnAIngestor:
     # ----------------------------------------------------------------------------------------------- #
 
     def upload_to_ai_search(self, qna_fd: pd.DataFrame) -> None:
-        filter_value = self.chatbot_name if self.chatbot_name in phase1_chatbots else self.chatbot_id
+        filter_value = self.chatbot_id
 
         qna_list = []
         for record in qna_fd.to_dict("records"):
