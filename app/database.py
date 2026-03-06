@@ -4,7 +4,7 @@ from langchain_core.documents import Document
 from typing import List
 from pydantic import Field
 
-from app.azure_clients.kb_clients import get_ai_search, get_phase1_ai_search, get_qna_ai_search
+from app.azure_clients.kb_clients import get_ai_search, get_qna_ai_search
 from config import Config
 
 config = Config()
@@ -19,15 +19,6 @@ uni_dbs = {
     "University of Stirling": f"postgresql+psycopg://{config.PG_VECTOR_USER}:{config.PG_VECTOR_PASSWORD}@{config.PG_VECTOR_HOST}:{config.PGPORT}/{config.PROD_US}"
 }
 
-phase1_chatbots = [
-    "British University Vietnam",
-    "Staffordshire University",
-    "University of London",
-    "International Foundation Programme",
-    "Arts University Bournemouth",
-    "University of Stirling"
-]
-
 class AzureAISearchRetriever(BaseRetriever):
     chatbot: str = Field(..., description="Chatbot id for filtering")
     chatbot_name: str = Field(..., description="Chatbot name for legacy checking")
@@ -36,9 +27,9 @@ class AzureAISearchRetriever(BaseRetriever):
     def _get_relevant_documents(self, query: str) -> List[Document]:
         print(f"[AI SEARCH RETRIEVER] Searching (k={self.k})")
 
-        knowledge_base = get_ai_search() if self.chatbot_name not in phase1_chatbots else get_phase1_ai_search()
+        knowledge_base = get_ai_search()
 
-        filter_value = self.chatbot_name if self.chatbot_name in phase1_chatbots else self.chatbot
+        filter_value = self.chatbot
 
         # Use the MMR-specific method for diversity
         search_results_with_score = knowledge_base.max_marginal_relevance_search_with_score(
@@ -73,8 +64,8 @@ class QuestionRetriever(BaseRetriever):
     def _get_relevant_documents(self, query: str) -> List[Document]:
         print(f"[QUESTION RETRIEVER] Searching (k={self.k})")
 
-        knowledge_base = get_ai_search() if self.chatbot_name not in phase1_chatbots else get_phase1_ai_search()
-        filter_value = self.chatbot_name if self.chatbot_name in phase1_chatbots else self.chatbot
+        knowledge_base = get_ai_search()
+        filter_value = self.chatbot
 
         search_results = knowledge_base.similarity_search(
             query       = query,
@@ -121,7 +112,7 @@ class QnARetriever(BaseRetriever):
     def _get_relevant_documents(self, query: str) -> List[Document]:
         print(f"[QNA RETRIEVER] Searching (k={self.k})")
         
-        filter_value = self.chatbot_name if self.chatbot_name in phase1_chatbots else self.chatbot
+        filter_value = self.chatbot
 
         # Retrieve k documents that passes the threshold
         search_results_with_score = get_qna_ai_search().similarity_search_with_relevance_scores(
@@ -165,7 +156,7 @@ def delete_qna(chatbot_id: str, chatbot_name: str, document_name: str) -> int:
         print(f"[DELETING QNA] starting deletion for {document_name}, of bot {chatbot_name}")
         
         # Select the right field value to filter by
-        filter_value = chatbot_name if chatbot_name in phase1_chatbots else chatbot_id
+        filter_value = chatbot_id
         
         docs_to_delete = get_qna_ai_search().client.search(
             "*",
@@ -197,8 +188,8 @@ def delete_doc_from_kb(chatbot_id: str, chatbot_name: str, document_name: str) -
     try: 
         print(f"[DELETING DOC] starting deletion for {document_name}, of bot {chatbot_name}")
 
-        knowledge_base = get_ai_search() if chatbot_name not in phase1_chatbots else get_phase1_ai_search()
-        filter_value = chatbot_name if chatbot_name in phase1_chatbots else chatbot_id
+        knowledge_base = get_ai_search()
+        filter_value = chatbot_id
         docs_to_delete = knowledge_base.client.search(
             "*",
             select = ["id"],
