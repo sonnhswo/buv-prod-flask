@@ -463,10 +463,14 @@ def upload_chatbot_file(current_user, id):
     file = request.files['file']
     if file.filename == '':
         return jsonify({"error": "No selected file"}), 400
+    
+    # if file size is greater than 10MB, reject the upload
 
     file.seek(0, os.SEEK_END)
     size = file.tell()
     file.seek(0)
+    if size > 10 * 1024 * 1024:
+        return jsonify({"error": "Invalid file"}), 400
 
     filename = secure_filename(file.filename)
 
