@@ -11,15 +11,14 @@ import pandas as pd
 from io import BytesIO
 from app.chatbot import clear_history
 from app.chatbot import generate_response
-from app.db_models.raw_db import ChatSession, Chatbot, ChatMessage, Document
-from app.extensions import db
-from config import Config
-from .database import uni_dbs, delete_qna, delete_doc_from_kb
-from app.storage import upload_blob, delete_blob, get_sas_url
+from app.storage import upload_blob, delete_blob, get_sas_url, enqueue_ingestion_task
 from app.decorators import token_required
 from app.document_ingestion import process_file_ingestion
+from app.db_models.raw_db import ChatSession, Chatbot, ChatMessage, Document, IngestionTask
 from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
+from app.extensions import db
+from config import Config
 
 config = Config()
 # Create a session
@@ -490,17 +489,35 @@ def upload_chatbot_file(current_user, id):
             owner_id=current_user.id
         )
         session.add(new_file)
+        session.flush() # flush to get the new_file.id
+
+        new_task = IngestionTask(chatbot_id=db_id, document_id=new_file.id, status='PENDING')
+        session.add(new_task)
         session.commit()
 
-        try:
-            execute_safely(process_file_ingestion, str(chatbot.id), chatbot.name, 'KNOWLEDGE_BASE', new_file.name, new_file.file_path)
-        except Exception as e:
-            execute_safely(delete_blob, blob_path)
-            session.delete(new_file)
+        # Drop the task to Azure Storage Queue
+        enqueued = enqueue_ingestion_task(
+            task_id=new_task.id, 
+            chatbot_id=db_id, 
+            document_id=new_file.id, 
+            document_type='KNOWLEDGE_BASE', 
+            document_name=new_file.name, 
+            document_path=new_file.file_path
+        )
+        
+        if not enqueued:
+            new_task.status = 'FAILED'
+            new_task.error_message = 'Failed to enqueue task'
             session.commit()
-            return jsonify({"error": f"Failed to ingest file: \n\t{e}"}), 500
+            return jsonify({"error": "File saved but failed to queue for ingestion"}), 500
 
-        return jsonify({"id": str(new_file.id), "filename": filename, "size": size, "created_at": new_file.created_at.isoformat()}), 201
+        return jsonify({
+            "id": str(new_file.id), 
+            "filename": filename, 
+            "size": size, 
+            "created_at": new_file.created_at.isoformat(),
+            "task_id": new_task.id
+        }), 202
     else:
         return jsonify({"error": "Failed to upload to storage"}), 500
 
@@ -542,12 +559,29 @@ def ingest_chatbot_file(current_user, id, file_id):
     if file.document_type not in ['QNA','KNOWLEDGE_BASE'] :
         return jsonify({"error": "Unrecognized file document type"}), 400
     try:
-        execute_safely(process_file_ingestion, str(chatbot.id), chatbot.name, file.document_type, file.name, file.file_path)
+        new_task = IngestionTask(chatbot_id=db_id, document_id=file.id, status='PENDING')
+        session.add(new_task)
+        session.commit()
 
-        return jsonify({"message": "Ingested"}), 200
+        enqueued = enqueue_ingestion_task(
+            task_id=new_task.id, 
+            chatbot_id=db_id, 
+            document_id=file.id, 
+            document_type=file.document_type, 
+            document_name=file.name, 
+            document_path=file.file_path
+        )
+
+        if not enqueued:
+            new_task.status = 'FAILED'
+            new_task.error_message = 'Failed to enqueue task'
+            session.commit()
+            return jsonify({"error": "Failed to queue file for ingestion"}), 500
+
+        return jsonify({"message": "Ingestion queued successfully", "task_id": new_task.id}), 202
 
     except Exception as e:
-        return jsonify({"error": f"Failed to ingest file: \n\t{e}"}), 500
+        return jsonify({"error": f"Failed to queue ingestion: \n\t{e}"}), 500
 
 @admin_portal_blueprint.route('/chatbots/<string:id>/files/<int:file_id>', methods=['DELETE'])
 @token_required
@@ -623,14 +657,33 @@ def replace_chatbot_file(current_user, id, file_id):
         file_record.file_path = blob_path
         file_record.file_size = size
         file_record.owner_id = current_user.id
+        
+        new_task = IngestionTask(chatbot_id=db_id, document_id=file_record.id, status='PENDING')
+        session.add(new_task)
         session.commit()
 
-        try:
-            execute_safely(process_file_ingestion, str(chatbot.id), chatbot.name, 'KNOWLEDGE_BASE', file_record.name, file_record.file_path)
-        except Exception as e:
-            return jsonify({"error": f"Failed to ingest file: \n\t{e}"}), 500
+        enqueued = enqueue_ingestion_task(
+            task_id=new_task.id, 
+            chatbot_id=db_id, 
+            document_id=file_record.id, 
+            document_type='KNOWLEDGE_BASE', 
+            document_name=file_record.name, 
+            document_path=file_record.file_path
+        )
+        
+        if not enqueued:
+            new_task.status = 'FAILED'
+            new_task.error_message = 'Failed to enqueue task'
+            session.commit()
+            return jsonify({"error": "File replaced but failed to queue for ingestion"}), 500
 
-        return jsonify({"id": str(file_record.id), "filename": filename, "size": size, "created_at": file_record.created_at.isoformat()}), 200
+        return jsonify({
+            "id": str(file_record.id), 
+            "filename": filename, 
+            "size": size, 
+            "created_at": file_record.created_at.isoformat(),
+            "task_id": new_task.id
+        }), 202
     else:
         return jsonify({"error": "Failed to upload to storage"}), 500
 
@@ -688,20 +741,165 @@ def add_chatbot_qna_file(current_user, id):
     if execute_safely(upload_blob, file, blob_path):
         new_file = Document(name=filename, chatbot_id=db_id, document_type='QNA', file_path=blob_path, owner_id=current_user.id)
         session.add(new_file)
+        session.flush()
+
+        new_task = IngestionTask(chatbot_id=db_id, document_id=new_file.id, status='PENDING')
+        session.add(new_task)
         session.commit()
 
-        chatbot = Chatbot.query.get(db_id)
-        try:
-            execute_safely(process_file_ingestion, str(chatbot.id), chatbot.name, 'QNA', new_file.name, new_file.file_path)
-        except Exception as e:
-            execute_safely(delete_blob, blob_path)
-            session.delete(new_file)
-            session.commit()
-            return jsonify({"error": f"Failed to ingest file: \n\t{e}"}), 500
+        enqueued = enqueue_ingestion_task(
+            task_id=new_task.id, 
+            chatbot_id=db_id, 
+            document_id=new_file.id, 
+            document_type='QNA', 
+            document_name=new_file.name, 
+            document_path=new_file.file_path
+        )
 
-        return jsonify({"message": "File added"}), 201
+        if not enqueued:
+            new_task.status = 'FAILED'
+            new_task.error_message = 'Failed to enqueue task'
+            session.commit()
+            return jsonify({"error": "File added but failed to queue for ingestion"}), 500
+
+        return jsonify({"message": "File added and ingestion queued", "task_id": new_task.id}), 202
     else:
         return jsonify({"error": "Failed to upload"}), 500
+
+@admin_portal_blueprint.route('/chatbots/<string:id>/tasks/<int:task_id>', methods=['GET'])
+@token_required
+def get_ingestion_task_status(current_user, id, task_id):
+    try:
+        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    except ValueError:
+        return jsonify({"error": "Invalid chatbot identifier"}), 400
+
+    task = IngestionTask.query.filter_by(id=task_id, chatbot_id=db_id).first()
+    if not task:
+        return jsonify({"error": "Task not found"}), 404
+
+    return jsonify({
+        "id": task.id,
+        "chatbot_id": task.chatbot_id,
+        "document_id": task.document_id,
+        "status": task.status,
+        "error_message": task.error_message,
+        "created_at": task.created_at.isoformat() if task.created_at else None,
+        "updated_at": task.updated_at.isoformat() if task.updated_at else None
+    }), 200
+
+
+@admin_portal_blueprint.route('/chatbots/<string:id>/tasks', methods=['GET'])
+@token_required
+def get_chatbot_ingestion_tasks_status(current_user, id):
+    """Return ingestion task status list for a chatbot."""
+    try:
+        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    except ValueError:
+        return jsonify({"error": "Invalid chatbot identifier"}), 400
+
+    chatbot = Chatbot.query.get(db_id)
+    if not chatbot:
+        return jsonify({"error": "Chatbot not found"}), 404
+
+    status_filter = request.args.get("status")
+    latest_per_file = request.args.get("latest_per_file", "true").lower() == "true"
+
+    query = IngestionTask.query.filter_by(chatbot_id=db_id)
+    if status_filter:
+        query = query.filter(IngestionTask.status == status_filter.upper())
+
+    tasks = query.order_by(IngestionTask.created_at.desc()).all()
+
+    def serialize_task(task):
+        return {
+            "id": task.id,
+            "chatbot_id": task.chatbot_id,
+            "document_id": task.document_id,
+            "document_name": task.document.name if task.document else None,
+            "status": task.status,
+            "error_message": task.error_message,
+            "created_at": task.created_at.isoformat() if task.created_at else None,
+            "updated_at": task.updated_at.isoformat() if task.updated_at else None
+        }
+
+    selected_tasks = tasks
+    if latest_per_file:
+        seen_document_ids = set()
+        deduped = []
+        for task in tasks:
+            if task.document_id in seen_document_ids:
+                continue
+            seen_document_ids.add(task.document_id)
+            deduped.append(task)
+        selected_tasks = deduped
+
+    counts = {"PENDING": 0, "PROCESSING": 0, "COMPLETED": 0, "FAILED": 0}
+    for task in selected_tasks:
+        if task.status in counts:
+            counts[task.status] += 1
+
+    return jsonify({
+        "chatbot_id": db_id,
+        "chatbot_name": chatbot.name,
+        "latest_per_file": latest_per_file,
+        "status_filter": status_filter.upper() if status_filter else None,
+        "count": len(selected_tasks),
+        "counts": counts,
+        "tasks": [serialize_task(task) for task in selected_tasks]
+    }), 200
+
+
+@admin_portal_blueprint.route('/chatbots/<string:id>/files/<int:file_id>/tasks', methods=['GET'])
+@token_required
+def get_file_ingestion_task_status(current_user, id, file_id):
+    """Return latest ingestion task for a file, optionally with full history."""
+    try:
+        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    except ValueError:
+        return jsonify({"error": "Invalid chatbot identifier"}), 400
+
+    file = Document.query.filter_by(id=file_id, chatbot_id=db_id).first()
+    if not file:
+        return jsonify({"error": "File not found"}), 404
+
+    tasks = IngestionTask.query.filter_by(chatbot_id=db_id, document_id=file_id)\
+        .order_by(IngestionTask.created_at.desc())\
+        .all()
+
+    if not tasks:
+        return jsonify({
+            "file_id": file_id,
+            "chatbot_id": db_id,
+            "status": "NO_TASK",
+            "task": None
+        }), 200
+
+    def serialize_task(task):
+        return {
+            "id": task.id,
+            "chatbot_id": task.chatbot_id,
+            "document_id": task.document_id,
+            "status": task.status,
+            "error_message": task.error_message,
+            "created_at": task.created_at.isoformat() if task.created_at else None,
+            "updated_at": task.updated_at.isoformat() if task.updated_at else None
+        }
+
+    include_history = request.args.get("include_history", "false").lower() == "true"
+    latest_task = tasks[0]
+
+    payload = {
+        "file_id": file_id,
+        "chatbot_id": db_id,
+        "status": latest_task.status,
+        "task": serialize_task(latest_task)
+    }
+
+    if include_history:
+        payload["tasks"] = [serialize_task(task) for task in tasks]
+
+    return jsonify(payload), 200
 
 @admin_portal_blueprint.route('/chatbots/<string:id>/qna/<int:file_id>', methods=['DELETE'])
 @token_required

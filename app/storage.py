@@ -1,16 +1,29 @@
 from datetime import datetime, timedelta, timezone
 from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
+from azure.storage.queue import QueueServiceClient
+import base64
+import json
 from config import Config
 
 config = Config()
 
 # Azure Blob Storage Helper Functions
 blob_service_client = None
+queue_service_client = None
 if config.BLOB_CONN_STRING:
     try:
         blob_service_client = BlobServiceClient.from_connection_string(config.BLOB_CONN_STRING)
+        queue_service_client = QueueServiceClient.from_connection_string(config.BLOB_CONN_STRING)
+        
+        # Ensure the queue exists
+        queue_client = queue_service_client.get_queue_client("document-ingestion-queue")
+        try:
+            queue_client.create_queue()
+        except Exception:
+            pass # Queue already exists
+            
     except Exception as e:
-        print(f"Failed to initialize BlobServiceClient: {e}")
+        print(f"Failed to initialize Azure Storage Clients: {e}")
 container_name = config.BLOB_CONTAINER
 
 def upload_blob(file, blob_path):
@@ -60,3 +73,30 @@ def get_sas_url(blob_path, filename=None):
     except Exception as e:
         print(f"Error generating SAS URL: {e}")
         return None
+
+def enqueue_ingestion_task(task_id: int, chatbot_id: int, document_id: int, document_type: str, document_name: str, document_path: str):
+    if queue_service_client is None:
+        print("Queue service client not initialized.")
+        return False
+        
+    try:
+        queue_client = queue_service_client.get_queue_client("document-ingestion-queue")
+        
+        message_dict = {
+            "task_id": task_id,
+            "chatbot_id": chatbot_id,
+            "document_id": document_id,
+            "document_type": document_type,
+            "document_name": document_name,
+            "document_path": document_path
+        }
+        
+        # Azure Storage expects base64 encoded strings
+        message_b64 = base64.b64encode(json.dumps(message_dict).encode('utf-8')).decode('utf-8')
+        queue_client.send_message(message_b64)
+        print(f"Successfully enqueued task {task_id}")
+        return True
+    except Exception as e:
+        print(f"Error enqueueing message: {e}")
+        return False
+
