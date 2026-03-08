@@ -19,6 +19,7 @@ azure-core==1.30.2
 azure-identity==1.16.0
 azure-search-documents==11.6.0
 azure-storage-blob==12.22.0
+azure-storage-queue==12.11.0
 
 # LangChain
 langchain==0.2.11

@@ -19,6 +19,7 @@ from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
 from app.extensions import db
 from config import Config
+from app.database import delete_doc_from_kb, uni_dbs, delete_qna
 
 config = Config()
 # Create a session
@@ -493,7 +494,7 @@ def upload_chatbot_file(current_user, id):
 
         new_task = IngestionTask(chatbot_id=db_id, document_id=new_file.id, status='PENDING')
         session.add(new_task)
-        session.commit()
+        session.flush()
 
         # Drop the task to Azure Storage Queue
         enqueued = enqueue_ingestion_task(
