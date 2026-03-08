@@ -763,6 +763,119 @@ def get_ingestion_task_status(current_user, id, task_id):
         "updated_at": task.updated_at.isoformat() if task.updated_at else None
     }), 200
 
+
+@admin_portal_blueprint.route('/chatbots/<string:id>/tasks', methods=['GET'])
+@token_required
+def get_chatbot_ingestion_tasks_status(current_user, id):
+    """Return ingestion task status list for a chatbot."""
+    try:
+        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    except ValueError:
+        return jsonify({"error": "Invalid chatbot identifier"}), 400
+
+    chatbot = Chatbot.query.get(db_id)
+    if not chatbot:
+        return jsonify({"error": "Chatbot not found"}), 404
+
+    status_filter = request.args.get("status")
+    latest_per_file = request.args.get("latest_per_file", "true").lower() == "true"
+
+    query = IngestionTask.query.filter_by(chatbot_id=db_id)
+    if status_filter:
+        query = query.filter(IngestionTask.status == status_filter.upper())
+
+    tasks = query.order_by(IngestionTask.created_at.desc()).all()
+
+    def serialize_task(task):
+        return {
+            "id": task.id,
+            "chatbot_id": task.chatbot_id,
+            "document_id": task.document_id,
+            "document_name": task.document.name if task.document else None,
+            "status": task.status,
+            "error_message": task.error_message,
+            "created_at": task.created_at.isoformat() if task.created_at else None,
+            "updated_at": task.updated_at.isoformat() if task.updated_at else None
+        }
+
+    selected_tasks = tasks
+    if latest_per_file:
+        seen_document_ids = set()
+        deduped = []
+        for task in tasks:
+            if task.document_id in seen_document_ids:
+                continue
+            seen_document_ids.add(task.document_id)
+            deduped.append(task)
+        selected_tasks = deduped
+
+    counts = {"PENDING": 0, "PROCESSING": 0, "COMPLETED": 0, "FAILED": 0}
+    for task in selected_tasks:
+        if task.status in counts:
+            counts[task.status] += 1
+
+    return jsonify({
+        "chatbot_id": db_id,
+        "chatbot_name": chatbot.name,
+        "latest_per_file": latest_per_file,
+        "status_filter": status_filter.upper() if status_filter else None,
+        "count": len(selected_tasks),
+        "counts": counts,
+        "tasks": [serialize_task(task) for task in selected_tasks]
+    }), 200
+
+
+@admin_portal_blueprint.route('/chatbots/<string:id>/files/<int:file_id>/tasks', methods=['GET'])
+@token_required
+def get_file_ingestion_task_status(current_user, id, file_id):
+    """Return latest ingestion task for a file, optionally with full history."""
+    try:
+        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+    except ValueError:
+        return jsonify({"error": "Invalid chatbot identifier"}), 400
+
+    file = Document.query.filter_by(id=file_id, chatbot_id=db_id).first()
+    if not file:
+        return jsonify({"error": "File not found"}), 404
+
+    tasks = IngestionTask.query.filter_by(chatbot_id=db_id, document_id=file_id)\
+        .order_by(IngestionTask.created_at.desc())\
+        .all()
+
+    if not tasks:
+        return jsonify({
+            "file_id": file_id,
+            "chatbot_id": db_id,
+            "status": "NO_TASK",
+            "task": None
+        }), 200
+
+    def serialize_task(task):
+        return {
+            "id": task.id,
+            "chatbot_id": task.chatbot_id,
+            "document_id": task.document_id,
+            "status": task.status,
+            "error_message": task.error_message,
+            "created_at": task.created_at.isoformat() if task.created_at else None,
+            "updated_at": task.updated_at.isoformat() if task.updated_at else None
+        }
+
+    include_history = request.args.get("include_history", "false").lower() == "true"
+    latest_task = tasks[0]
+
+    payload = {
+        "file_id": file_id,
+        "chatbot_id": db_id,
+        "status": latest_task.status,
+        "task": serialize_task(latest_task)
+    }
+
+    if include_history:
+        payload["tasks"] = [serialize_task(task) for task in tasks]
+
+    return jsonify(payload), 200
+
 @admin_portal_blueprint.route('/chatbots/<string:id>/qna/<int:file_id>', methods=['DELETE'])
 @token_required
 def delete_chatbot_qna_file(current_user, id, file_id):

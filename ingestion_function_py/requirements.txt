@@ -1,0 +1,11 @@
+azure-functions==1.23.0
+azure-storage-blob==12.23.1
+azure-ai-documentintelligence==1.0.2
+langchain-core==0.2.24
+langchain-text-splitters==0.2.2
+openai==1.37.1
+pandas==2.2.2
+openpyxl==3.1.5
+psycopg2-binary==2.9.9
+python-dotenv==1.0.1
+requests==2.32.3
