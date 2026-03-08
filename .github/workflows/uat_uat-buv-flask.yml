@@ -23,7 +23,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt -t ./.python_packages/lib/site-packages
+        run: pip install -r requirements.txt
 
       - name: Zip artifact for deployment
         run: |
@@ -31,9 +31,10 @@ jobs:
             --exclude "*.git*" \
             --exclude "venv/*" \
             --exclude ".venv/*" \
-            --exclude "__pycache__/*" \
+            --exclude "**/__pycache__/*" \
             --exclude "*.pyc" \
-            --exclude ".github/*"
+            --exclude ".github/*" \
+            --exclude ".python_packages/*"
 
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
