@@ -34,10 +34,16 @@ def generate_response(user_input: str, session_id: str, chatbot_id: str, chatbot
             page_number = None
             relevant_questions = []
         else:
-            # create history aware retriever
+            # Collect past user questions from chat history so we can exclude them from suggestions
+            asked_questions = [user_input]
+            history = get_session_history(session_id)
+            for msg in history.messages:
+                if msg.type == "human":
+                    asked_questions.append(msg.content)
+
             qna_retriever = QnARetriever(chatbot=chatbot_id, chatbot_name=chatbot_name, k=1)
             doc_retriever = AzureAISearchRetriever(chatbot=chatbot_id, chatbot_name=chatbot_name, k=config.DOC_TOP_K)
-            question_retriever = QuestionRetriever(chatbot=chatbot_id, chatbot_name=chatbot_name, k=config.QUESTION_TOP_K)
+            question_retriever = QuestionRetriever(chatbot=chatbot_id, chatbot_name=chatbot_name, k=config.QUESTION_TOP_K, exclude_questions=asked_questions)
 
             conversational_rag_chain = create_conversational_rag_chain(doc_retriever, get_session_history)
             relevant_questions_chain = create_relevant_questions_chain(question_retriever)
@@ -106,9 +112,15 @@ def generate_response_stream(user_input: str, session_id: str, chatbot_id: str, 
             yield {'type': 'questions', 'relevant_questions': []}
             yield {'type': 'done'}
         else:
-            # Initialize retrievers
+            # Collect past user questions from chat history so we can exclude them from suggestions
+            asked_questions = [user_input]
+            history = get_session_history(session_id)
+            for msg in history.messages:
+                if msg.type == "human":
+                    asked_questions.append(msg.content)
+
             qna_retriever = QnARetriever(chatbot=chatbot_id, chatbot_name=uni_name, k=1)
-            question_retriever = AzureAISearchRetriever(chatbot=chatbot_id, chatbot_name=uni_name, k=config.QUESTION_TOP_K)
+            question_retriever = QuestionRetriever(chatbot=chatbot_id, chatbot_name=uni_name, k=config.QUESTION_TOP_K, exclude_questions=asked_questions)
             
             relevant_questions_chain = create_relevant_questions_chain(question_retriever)
 

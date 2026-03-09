@@ -1,4 +1,5 @@
 import math
+from difflib import SequenceMatcher
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.documents import Document
 
@@ -68,38 +69,53 @@ class QuestionRetriever(BaseRetriever):
     chatbot: str = Field(..., description="Chatbot id for filtering")
     chatbot_name: str = Field(..., description="Chatbot name for legacy checking")
     k: int = Field(default=3, description="Number of questions to return")
+    exclude_questions: List[str] = Field(default_factory=list, description="Questions to exclude from results (e.g. already asked)")
+
+    def _is_duplicate(self, candidate: str, threshold: float = 0.85) -> bool:
+        candidate_norm = candidate.strip().lower()
+        for q in self.exclude_questions:
+            q_norm = q.strip().lower()
+            if candidate_norm == q_norm:
+                return True
+            if SequenceMatcher(None, candidate_norm, q_norm).ratio() >= threshold:
+                return True
+        return False
 
     def _get_relevant_documents(self, query: str) -> List[Document]:
-        print(f"[QUESTION RETRIEVER] Searching (k={self.k})")
+        print(f"[QUESTION RETRIEVER] Searching (k={self.k}, excluding {len(self.exclude_questions)} questions)")
 
         knowledge_base = get_ai_search()
         filter_value = self.chatbot
 
+        # Fetch more candidates so we still have enough after filtering
+        fetch_k = config.QUESTION_TOP_K + len(self.exclude_questions)
         search_results = knowledge_base.similarity_search(
             query       = query,
-            k           = config.QUESTION_TOP_K,
+            k           = fetch_k,
             search_type = "similarity",
             filters     = f"chatbot eq '{filter_value}'" 
         )
-        print(f"[QUESTION RETRIEVER] Found {len(search_results)} documents.")
+        print(f"[QUESTION RETRIEVER] Found {len(search_results)} documents before filtering.")
 
-        # Fallback: top up with arbitrary docs 
-        if len(search_results) < self.k:
+        filtered = [doc for doc in search_results if not self._is_duplicate(doc.page_content)]
 
-            shortfall = self.k - len(search_results)
+        # Fallback: top up with arbitrary docs if still short
+        if len(filtered) < self.k:
+            shortfall = self.k - len(filtered)
             print(f"[QUESTION RETRIEVER][WARN] Short by {shortfall}, pulling arbitrary docs...")
 
             fallback_results = knowledge_base.similarity_search(
-            query       = "",
-            k           = config.QUESTION_TOP_K,
-            search_type = "similarity",
-            filters     = f"chatbot eq '{filter_value}'" 
-        )
+                query       = "",
+                k           = fetch_k,
+                search_type = "similarity",
+                filters     = f"chatbot eq '{filter_value}'" 
+            )
             for doc in fallback_results:
-                search_results.append(doc)
+                if not self._is_duplicate(doc.page_content) and doc not in filtered:
+                    filtered.append(doc)
 
         list_docs = []
-        for doc_obj in search_results:
+        for doc_obj in filtered[:self.k]:
             title = doc_obj.metadata.get("document_title")
             page_number = doc_obj.metadata.get("page_number")
             if isinstance(title, float) and math.isnan(title): title = None
