@@ -495,6 +495,7 @@ def upload_chatbot_file(current_user, id):
         new_task = IngestionTask(chatbot_id=db_id, document_id=new_file.id, status='PENDING')
         session.add(new_task)
         session.flush()
+        session.commit()
 
         # Drop the task to Azure Storage Queue
         enqueued = enqueue_ingestion_task(
