@@ -338,9 +338,9 @@ def download_chatbot_file_by_name(chatbot_id, filename):
     return jsonify({"error": "File not found"}), 404
 
 
-@user_portal_blueprint.route('/chatbots/<int:chatbot_id>/suggested_questions', methods=['GET'])
-def get_suggested_questions(chatbot_id):
-    """Get starter suggested questions for a chatbot from its knowledge base."""
+@user_portal_blueprint.route('/chatbots/<int:chatbot_id>/starter_questions', methods=['GET'])
+def get_random_starter_questions(chatbot_id):
+    """Get random starter questions for a chatbot from its knowledge base."""
     chatbot = Chatbot.query.get(chatbot_id)
     if not chatbot:
         return jsonify({"error": "Chatbot not found"}), 404
