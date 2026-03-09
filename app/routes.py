@@ -20,6 +20,8 @@ from openpyxl.utils import get_column_letter
 from app.extensions import db
 from config import Config
 from app.database import delete_doc_from_kb, uni_dbs, delete_qna
+from app.azure_clients.kb_clients import get_ai_search
+import random
 
 config = Config()
 # Create a session
@@ -334,6 +336,34 @@ def download_chatbot_file_by_name(chatbot_id, filename):
         if url:
             return redirect(url)
     return jsonify({"error": "File not found"}), 404
+
+
+@user_portal_blueprint.route('/chatbots/<int:chatbot_id>/suggested_questions', methods=['GET'])
+def get_suggested_questions(chatbot_id):
+    """Get starter suggested questions for a chatbot from its knowledge base."""
+    chatbot = Chatbot.query.get(chatbot_id)
+    if not chatbot:
+        return jsonify({"error": "Chatbot not found"}), 404
+
+    if not chatbot.is_active:
+        return jsonify({"error": "Chatbot is not active"}), 403
+
+    try:
+        k = request.args.get("k", default=3, type=int)
+        knowledge_base = get_ai_search()
+        results = knowledge_base.client.search(
+            "*",
+            select=["content"],
+            filter=f"chatbot eq '{chatbot.id}'",
+            top=50
+        )
+        pool = list({doc["content"] for doc in results if doc.get("content")})
+        questions = random.sample(pool, min(k, len(pool)))
+        return jsonify({"relevant_questions": questions}), 200
+    except Exception as e:
+        print(f"Error fetching suggested questions for chatbot {chatbot_id}: {e}")
+        return jsonify({"relevant_questions": []}), 200
+
 
 # Admin Portal Endpoints
 
