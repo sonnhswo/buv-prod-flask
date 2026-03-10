@@ -13,6 +13,9 @@ class Settings:
     aoai_endpoint: str
     ingest_model_name: str
     ingest_model_api_version: str
+    deterministic_tmp: float
+    creative_tmp: float
+    vector_search_profile_name: str
     embedding_model_name: str
     embedding_model_api_version: str
     doc_int_endpoint: str
@@ -58,6 +61,9 @@ def load_settings() -> Settings:
         aoai_endpoint=_required("AZURE_OPENAI_ENDPOINT").rstrip("/"),
         ingest_model_name=_required("AZURE_INGEST_MODEL_DEPLOYMENT_NAME"),
         ingest_model_api_version=_required("AZURE_INGEST_MODEL_DEPLOYMENT_VERSION"),
+        deterministic_tmp=float(os.getenv("DETERMINISTIC_TMP", "0")),
+        creative_tmp=float(os.getenv("CREATIVE_TMP", "1")),
+        vector_search_profile_name=_required("VECTOR_SEARCH_PROFILE"),
         embedding_model_name=_required("AZURE_EMBEDDING_MODEL_DEPLOYMENT_NAME"),
         embedding_model_api_version=_required("AZURE_EMBEDDING_MODEL_OPENAI_VERSION"),
         doc_int_endpoint=_required("DOC_INT_ENDPOINT"),

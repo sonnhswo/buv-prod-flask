@@ -1,377 +1,22 @@
-import re
-import uuid
-import json
 import os
-import threading
-import queue
-from werkzeug.utils import secure_filename
-from flask import Blueprint, request, jsonify, Response, stream_with_context, redirect, send_file
-from sqlalchemy import create_engine
-from datetime import datetime, timezone, timedelta
-import pandas as pd
 from io import BytesIO
-from app.chatbot import clear_history
-from app.chatbot import generate_response
-from app.storage import upload_blob, delete_blob, get_sas_url, enqueue_ingestion_task
-from app.decorators import token_required
-from app.document_ingestion import process_file_ingestion
-from app.db_models.raw_db import ChatSession, Chatbot, ChatMessage, Document, IngestionTask
+from datetime import datetime, timezone, timedelta
+from werkzeug.utils import secure_filename
+from flask import Blueprint, request, jsonify, redirect, send_file
+import pandas as pd
 from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
+from app.storage import upload_blob, delete_blob, get_sas_url, enqueue_ingestion_task
+from app.decorators import token_required
+from app.db_models.raw_db import ChatSession, Chatbot, ChatMessage, Document, IngestionTask
 from app.extensions import db
-from config import Config
-from app.database import delete_doc_from_kb, uni_dbs, delete_qna
-from app.azure_clients.kb_clients import get_ai_search
-import random
+from app.database import delete_doc_from_kb, delete_qna
+from app.routes.helpers import execute_safely, parse_chatbot_id
 
-config = Config()
-# Create a session
 session = db.session
 
-
-def _contains_except_keyword(text: str, keyword: str) -> bool:
-    """Check if keyword appears as a whole word (avoids false positives like 'SU' in 'support')."""
-    return bool(re.search(r"\b" + re.escape(keyword) + r"\b", text, re.IGNORECASE))
-
-chatbot_blueprint = Blueprint('chatbot', __name__)
-question_suggest_blueprint = Blueprint('question_suggest', __name__)
-user_portal_blueprint = Blueprint('user_portal', __name__)
 admin_portal_blueprint = Blueprint('admin_portal', __name__)
 
-@chatbot_blueprint.route('/health', methods=['GET'])
-def health():
-    return jsonify({"status": "ok"}), 200
-
-
-def execute_safely(func, *args, **kwargs):
-    q = queue.Queue()
-    def wrapper():
-        try:
-            res = func(*args, **kwargs)
-            q.put(("SUCCESS", res))
-        except Exception as e:
-            q.put(("ERROR", e))
-    t = threading.Thread(target=wrapper)
-    t.start()
-    t.join()
-    status, res = q.get()
-    if status == "ERROR":
-        raise res
-    return res
-
-@chatbot_blueprint.route('/<string:chatbot_id>/new_session_id', methods=['GET'])
-def get_new_session_id(chatbot_id: str):
-    # Check if chatbot exists
-    chatbot = Chatbot.query.get(chatbot_id)
-    if not chatbot:
-        return jsonify({"error": "Chatbot not found"}), 404
-    new_record = ChatSession(user_id="0", chatbot_id=chatbot_id)
-    session.add(new_record)
-    session.commit()
-    session_id = new_record.id
-    session.close()
-    return jsonify({"message": "New chat session created successfully", "data": {"session_id": session_id}}), 200
-
-
-@chatbot_blueprint.route('/clear_conversation', methods=['POST'])
-def clear_conversation():
-    data: dict = request.json
-    session_id: int = data.get('session_id')
-    clear_history(str(session_id))
-    return jsonify({"response": "Conversation cleared!"})
-
-
-@chatbot_blueprint.route('/<int:chatbot_id>', methods=['POST'])
-def chat(chatbot_id: int):
-    data: dict = request.json
-    user_input: str = data.get('message')
-    session_id: int = data.get('session_id')
-
-    if not user_input:
-        return jsonify({"error": "No message provided"}), 400
-
-    if not session_id:
-        return jsonify({"error": "No session_id provided"}), 400
-    
-    chatbot = Chatbot.query.get(chatbot_id)
-    if not chatbot:
-        return jsonify({"error": "Chatbot not found"}), 404
-
-    ab_configs = None
-    if chatbot.configuration:
-        ab_configs = config.AB_CONFIGS.get(chatbot.configuration['endpoint'])
-    
-    # phase 1 bots
-    if ab_configs:
-        except_keywords = ab_configs['except_keywords']
-        full_name = ab_configs['full_name']
-    # phase 2 bots
-    else:
-        except_keywords = []
-        full_name = chatbot.name
-
-    ask_relevant_question = True
-    for keyword in except_keywords:
-        if _contains_except_keyword(user_input, keyword):
-            answer = f"Thank you for your question. Unfortunately, I can only provide answers related to {full_name}. Please reach out to our Student Information Office at studentservice@buv.edu.vn for further assistance."
-            response = {
-                "answer": answer,
-                "source": None,
-                "page_number": None,
-                "relevant_questions": [] 
-            }
-            ask_relevant_question = False
-            break
-
-    if ask_relevant_question:
-        print(f"Executing langchain for chatbot {full_name=}.")
-        response = generate_response(user_input, str(session_id), str(chatbot.id), full_name)
-
-    new_human_message = ChatMessage(message=user_input, is_user_message=True, session_id=session_id)
-    new_ai_message = ChatMessage(message=response["answer"], is_user_message=False, session_id=session_id)
-    session.add(new_human_message)
-    session.add(new_ai_message)
-    session.commit()
-    response["ai_message_id"] = new_ai_message.id
-    session.close()
-    return jsonify(response)
-
-
-@chatbot_blueprint.route('/<int:chatbot_id>/stream', methods=['POST'])
-def chat_stream(chatbot_id: int):
-    data: dict = request.json
-    user_input: str = data.get('message')
-    session_id: int = data.get('session_id')
-
-    if not user_input:
-        return jsonify({"error": "No message provided"}), 400
-
-    if not session_id:
-        return jsonify({"error": "No session_id provided"}), 400
-    
-    chatbot = Chatbot.query.get(chatbot_id)
-    if not chatbot:
-        return jsonify({"error": "Chatbot not found"}), 404
-
-    ab_configs = None
-    if chatbot.configuration:
-        ab_configs = config.AB_CONFIGS.get(chatbot.configuration['endpoint'])
-    
-    # phase 1 bots
-    if ab_configs:
-        except_keywords = ab_configs['except_keywords']
-        full_name = ab_configs['full_name']
-    # phase 2 bots
-    else:
-        except_keywords = []
-        full_name = chatbot.name
-
-    def generate():
-        ask_relevant_question = True
-        for keyword in except_keywords:
-            if _contains_except_keyword(user_input, keyword):
-                answer = f"Thank you for your question. Unfortunately, I can only provide answers related to {full_name}. Please reach out to our Student Information Office at studentservice@buv.edu.vn for further assistance."
-                
-                # Stream the static response
-                yield f"data: {json.dumps({'type': 'content', 'content': answer})}\n\n"
-                yield f"data: {json.dumps({'type': 'metadata', 'source': None, 'page_number': None})}\n\n"
-                yield f"data: {json.dumps({'type': 'questions', 'relevant_questions': []})}\n\n"
-                yield f"data: {json.dumps({'type': 'done'})}\n\n"
-                
-                # Save to database
-                new_human_message = ChatMessage(message=user_input, is_user_message=True, session_id=session_id)
-                new_ai_message = ChatMessage(message=answer, is_user_message=False, session_id=session_id)
-                session.add(new_human_message)
-                session.add(new_ai_message)
-                session.commit()
-                
-                yield f"data: {json.dumps({'type': 'message_id', 'ai_message_id': new_ai_message.id})}\n\n"
-                
-                ask_relevant_question = False
-                return
-        
-        if ask_relevant_question:
-            from app.chatbot import generate_response_stream
-            full_answer = ""
-
-            try:
-                for chunk in generate_response_stream(user_input, str(session_id), str(chatbot.id), full_name):
-                    if chunk['type'] == 'content':
-                        full_answer += chunk['content']
-                    yield f"data: {json.dumps(chunk)}\n\n"
-                
-                # Save to database after streaming completes
-                new_human_message = ChatMessage(message=user_input, is_user_message=True, session_id=session_id)
-                new_ai_message = ChatMessage(message=full_answer, is_user_message=False, session_id=session_id)
-                session.add(new_human_message)
-                session.add(new_ai_message)
-                session.commit()
-                
-                # Send message ID
-                yield f"data: {json.dumps({'type': 'message_id', 'ai_message_id': new_ai_message.id})}\n\n"
-                
-            except Exception as e:
-                print(f"Error during streaming: {e}")
-                error_msg = "An error occurred while processing your request."
-                yield f"data: {json.dumps({'type': 'error', 'error': error_msg})}\n\n"
-
-    return Response(
-        stream_with_context(generate()),
-        mimetype='text/event-stream',
-        headers={
-            'Cache-Control': 'no-cache',
-            'X-Accel-Buffering': 'no'
-        }
-    )
-
-
-@chatbot_blueprint.route('/like/<int:message_id>', methods=['GET'])
-def thumb_up(message_id: int):
-    message = ChatMessage.query.get(message_id)
-    if message:
-        message.like = config.THUMB_UP_VALUE
-        session.commit()
-        return jsonify({"message": "message liked successfully"}), 200
-    else:
-        return jsonify({"error": "Message not found"}), 404
-
-@chatbot_blueprint.route('/dislike/<int:message_id>', methods=['GET'])
-def thumb_down(message_id: int):
-    message = ChatMessage.query.get(message_id)
-    if message:
-        message.like = config.THUMB_DOWN_VALUE
-        session.commit()
-        return jsonify({"message": "message disliked successfully"}), 200
-    else:
-        return jsonify({"error": "Message not found"}), 404 
-
-@chatbot_blueprint.route('/unlike/<int:message_id>', methods=['GET'])
-def no_thumb(message_id: int):
-    message = ChatMessage.query.get(message_id)
-    if message:
-        message.like = config.NO_THUMB_VALUE
-        session.commit()
-        return jsonify({"message": "message unliked successfully"}), 200
-    else:
-        return jsonify({"error": "Message not found"}), 404 
-
-@question_suggest_blueprint.route('/start', methods=['GET'])
-def start_questions():
-    awarding_body = request.args.get("awarding_body")
-    if awarding_body == "buv":
-        connection_string = uni_dbs['British University Vietnam']
-    elif awarding_body == "su":
-        connection_string = uni_dbs['Staffordshire University']
-
-    results = [
-        "How can I book an appointment with a tutor for academic support?",
-        "What steps should I take if I am unable to attend an exam due to unforeseen circumstances?",
-        "How can I access career counselling or job placement services at BUV?",
-    ]
-    
-    return jsonify({'relevant_questions': results})
-
-
-# User Portal Endpoints
-@user_portal_blueprint.route('/chatbots/<string:division>', methods=['GET'])
-def get_chatbots_by_division(division):
-    """Get list of all active chatbots for a specific division"""
-    try:
-        chatbots = Chatbot.query.filter_by(division=division, is_active=True).all()
-        
-        chatbot_list = []
-        for chatbot in chatbots:
-            chatbot_list.append({
-                'id': chatbot.id,
-                'name': chatbot.name,
-                'description': chatbot.description,
-                'division': chatbot.division,
-                'configuration': chatbot.configuration,
-                'publish_date': chatbot.publish_date.isoformat() if chatbot.publish_date else None,
-                'created_at': chatbot.created_at.isoformat() if chatbot.created_at else None,
-                'updated_at': chatbot.updated_at.isoformat() if chatbot.updated_at else None
-            })
-        
-        return jsonify({
-            'data': chatbot_list,
-            'count': len(chatbot_list)
-        }), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@user_portal_blueprint.route('/chatbots/<int:chatbot_id>', methods=['GET'])
-def get_chatbot_detail(chatbot_id):
-    """Get detailed information about a specific chatbot"""
-    try:
-        chatbot = Chatbot.query.get(chatbot_id)
-        
-        if not chatbot:
-            return jsonify({'error': 'Chatbot not found'}), 404
-        
-        if not chatbot.is_active:
-            return jsonify({'error': 'Chatbot is not active'}), 403
-        
-        chatbot_detail = {
-            'id': chatbot.id,
-            'name': chatbot.name,
-            'description': chatbot.description,
-            'database_name': chatbot.database_name,
-            'attachments': chatbot.attachments,
-            'configuration': chatbot.configuration,
-            'division': chatbot.division,
-            'is_active': chatbot.is_active,
-            'publish_date': chatbot.publish_date.isoformat() if chatbot.publish_date else None,
-            'created_at': chatbot.created_at.isoformat() if chatbot.created_at else None,
-            'updated_at': chatbot.updated_at.isoformat() if chatbot.updated_at else None
-        }
-        
-        return jsonify({
-            'data': chatbot_detail
-        }), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@user_portal_blueprint.route('/chatbots/<int:chatbot_id>/files/<string:filename>/download', methods=['GET'])
-def download_chatbot_file_by_name(chatbot_id, filename):
-    file = Document.query.filter_by(name=filename, chatbot_id=chatbot_id).first()
-    if not file:
-        file = Document.query.filter_by(name=secure_filename(filename), chatbot_id=chatbot_id).first()
-    if file and file.file_path:
-        url = get_sas_url(file.file_path, filename=file.name)
-        if url:
-            return redirect(url)
-    return jsonify({"error": "File not found"}), 404
-
-
-@user_portal_blueprint.route('/chatbots/<int:chatbot_id>/starter_questions', methods=['GET'])
-def get_random_starter_questions(chatbot_id):
-    """Get random starter questions for a chatbot from its knowledge base."""
-    chatbot = Chatbot.query.get(chatbot_id)
-    if not chatbot:
-        return jsonify({"error": "Chatbot not found"}), 404
-
-    if not chatbot.is_active:
-        return jsonify({"error": "Chatbot is not active"}), 403
-
-    try:
-        k = request.args.get("k", default=3, type=int)
-        knowledge_base = get_ai_search()
-        results = knowledge_base.client.search(
-            "*",
-            select=["content"],
-            filter=f"chatbot eq '{chatbot.id}'",
-            top=50
-        )
-        pool = list({doc["content"] for doc in results if doc.get("content")})
-        questions = random.sample(pool, min(k, len(pool)))
-        return jsonify({"relevant_questions": questions}), 200
-    except Exception as e:
-        print(f"Error fetching suggested questions for chatbot {chatbot_id}: {e}")
-        return jsonify({"relevant_questions": []}), 200
-
-
-# Admin Portal Endpoints
 
 @admin_portal_blueprint.route('/chatbots', methods=['GET'])
 @token_required
@@ -381,6 +26,7 @@ def get_chatbots(current_user):
         query = query.filter((Chatbot.division == current_user.division) | (Chatbot.division.is_(None)))
 
     bots = query.order_by(Chatbot.created_at.desc()).all()
+
     return jsonify([{
         "id": f"CB{b.id:03d}",
         "name": b.name,
@@ -395,7 +41,7 @@ def get_chatbots(current_user):
 @token_required
 def get_admin_chatbot(current_user, id):
     try:
-        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+        db_id = parse_chatbot_id(id)
     except ValueError:
         return jsonify({"error": "Invalid chatbot identifier"}), 400
     b = Chatbot.query.get(db_id)
@@ -439,7 +85,7 @@ def create_chatbot(current_user):
 @token_required
 def update_chatbot(current_user, id):
     try:
-        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+        db_id = parse_chatbot_id(id)
     except ValueError:
         return jsonify({"error": "Invalid chatbot identifier"}), 400
     bot = Chatbot.query.get(db_id)
@@ -469,7 +115,7 @@ def update_chatbot(current_user, id):
 @token_required
 def get_chatbot_files(current_user, id):
     try:
-        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+        db_id = parse_chatbot_id(id)
     except ValueError:
         return jsonify({"error": "Invalid chatbot identifier"}), 400
 
@@ -485,7 +131,7 @@ def get_chatbot_files(current_user, id):
 @token_required
 def upload_chatbot_file(current_user, id):
     try:
-        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+        db_id = parse_chatbot_id(id)
     except ValueError:
         return jsonify({"error": "Invalid chatbot identifier"}), 400
 
@@ -582,7 +228,7 @@ def ingest_chatbot_file(current_user, id, file_id):
             - 500: Server error during the ingestion process.
     """
     try:
-        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+        db_id = parse_chatbot_id(id)
     except ValueError:
         return jsonify({"error": "Invalid chatbot identifier"}), 400
 
@@ -625,11 +271,12 @@ def ingest_chatbot_file(current_user, id, file_id):
 @token_required
 def delete_chatbot_file(current_user, id, file_id):
     try:
-        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+        db_id = parse_chatbot_id(id)
     except ValueError:
         return jsonify({"error": "Invalid chatbot identifier"}), 400
 
     file = Document.query.filter_by(id=file_id, chatbot_id=db_id).first()
+    tasks = IngestionTask.query.filter_by(document_id=file_id, chatbot_id=db_id).all()
     if not file:
         return jsonify({"error": "File not found"}), 404
 
@@ -645,6 +292,8 @@ def delete_chatbot_file(current_user, id, file_id):
         if file.file_path:
             execute_safely(delete_blob, file.file_path)
         session.delete(file)
+        for t in tasks:
+            session.delete(t)
         session.commit()
         return jsonify({"message": "Deleted"}), 200
     except Exception as e:
@@ -655,7 +304,7 @@ def delete_chatbot_file(current_user, id, file_id):
 @token_required
 def replace_chatbot_file(current_user, id, file_id):
     try:
-        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+        db_id = parse_chatbot_id(id)
     except ValueError:
         return jsonify({"error": "Invalid chatbot identifier"}), 400
 
@@ -728,7 +377,7 @@ def replace_chatbot_file(current_user, id, file_id):
 @admin_portal_blueprint.route('/chatbots/<string:id>/files/<int:file_id>/download', methods=['GET'])
 def download_chatbot_file(id, file_id):
     try:
-        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+        db_id = parse_chatbot_id(id)
     except ValueError:
         return jsonify({"error": "Invalid chatbot identifier"}), 400
 
@@ -743,7 +392,7 @@ def download_chatbot_file(id, file_id):
 @token_required
 def get_chatbot_qna_files(current_user, id):
     try:
-        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+        db_id = parse_chatbot_id(id)
     except ValueError:
         return jsonify({"error": "Invalid chatbot identifier"}), 400
 
@@ -758,7 +407,7 @@ def get_chatbot_qna_files(current_user, id):
 @token_required
 def add_chatbot_qna_file(current_user, id):
     try:
-        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+        db_id = parse_chatbot_id(id)
     except ValueError:
         return jsonify({"error": "Invalid chatbot identifier"}), 400
 
@@ -808,7 +457,7 @@ def add_chatbot_qna_file(current_user, id):
 @token_required
 def get_ingestion_task_status(current_user, id, task_id):
     try:
-        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+        db_id = parse_chatbot_id(id)
     except ValueError:
         return jsonify({"error": "Invalid chatbot identifier"}), 400
 
@@ -832,7 +481,7 @@ def get_ingestion_task_status(current_user, id, task_id):
 def get_chatbot_ingestion_tasks_status(current_user, id):
     """Return ingestion task status list for a chatbot."""
     try:
-        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+        db_id = parse_chatbot_id(id)
     except ValueError:
         return jsonify({"error": "Invalid chatbot identifier"}), 400
 
@@ -842,10 +491,13 @@ def get_chatbot_ingestion_tasks_status(current_user, id):
 
     status_filter = request.args.get("status")
     latest_per_file = request.args.get("latest_per_file", "true").lower() == "true"
+    file_type = request.args.get("type")  # 'QNA' or 'KNOWLEDGE_BASE'
 
     query = IngestionTask.query.filter_by(chatbot_id=db_id)
     if status_filter:
         query = query.filter(IngestionTask.status == status_filter.upper())
+    if file_type:
+        query = query.join(Document).filter(Document.document_type == file_type)
 
     tasks = query.order_by(IngestionTask.created_at.desc()).all()
 
@@ -872,18 +524,9 @@ def get_chatbot_ingestion_tasks_status(current_user, id):
             deduped.append(task)
         selected_tasks = deduped
 
-    counts = {"PENDING": 0, "PROCESSING": 0, "COMPLETED": 0, "FAILED": 0}
-    for task in selected_tasks:
-        if task.status in counts:
-            counts[task.status] += 1
-
     return jsonify({
         "chatbot_id": db_id,
-        "chatbot_name": chatbot.name,
         "latest_per_file": latest_per_file,
-        "status_filter": status_filter.upper() if status_filter else None,
-        "count": len(selected_tasks),
-        "counts": counts,
         "tasks": [serialize_task(task) for task in selected_tasks]
     }), 200
 
@@ -893,7 +536,7 @@ def get_chatbot_ingestion_tasks_status(current_user, id):
 def get_file_ingestion_task_status(current_user, id, file_id):
     """Return latest ingestion task for a file, optionally with full history."""
     try:
-        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+        db_id = parse_chatbot_id(id)
     except ValueError:
         return jsonify({"error": "Invalid chatbot identifier"}), 400
 
@@ -939,11 +582,42 @@ def get_file_ingestion_task_status(current_user, id, file_id):
 
     return jsonify(payload), 200
 
+
+@admin_portal_blueprint.route('/tasks/polling', methods=['GET'])
+@token_required
+def get_all_chatbots_ingestion_polling_map(current_user):
+    """Return total and successful ingestion task counts per chatbot."""
+    chatbot_query = Chatbot.query
+    if current_user.division:
+        chatbot_query = chatbot_query.filter((Chatbot.division == current_user.division) | (Chatbot.division.is_(None)))
+    chatbots = chatbot_query.order_by(Chatbot.created_at.desc()).all()
+
+    if not chatbots:
+        return jsonify([]), 200
+
+    bot_ids = [b.id for b in chatbots]
+    task_counts = db.session.query(
+        IngestionTask.chatbot_id,
+        db.func.count(IngestionTask.id).label("total_tasks"),
+        db.func.sum(db.case((IngestionTask.status == 'COMPLETED', 1), else_=0)).label("success_tasks")
+    ).filter(
+        IngestionTask.chatbot_id.in_(bot_ids)
+    ).group_by(
+        IngestionTask.chatbot_id
+    ).all()
+    task_counts_dict = {tc.chatbot_id: tc for tc in task_counts}
+
+    return jsonify([{
+        "chatbot_id": b.id,
+        "total_tasks": task_counts_dict[b.id].total_tasks if b.id in task_counts_dict else 0,
+        "success_tasks": task_counts_dict[b.id].success_tasks if b.id in task_counts_dict else 0
+    } for b in chatbots]), 200
+
 @admin_portal_blueprint.route('/chatbots/<string:id>/qna/<int:file_id>', methods=['DELETE'])
 @token_required
 def delete_chatbot_qna_file(current_user, id, file_id):
     try:
-        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+        db_id = parse_chatbot_id(id)
     except ValueError:
         return jsonify({"error": "Invalid chatbot identifier"}), 400
 
@@ -972,7 +646,7 @@ def delete_chatbot_qna_file(current_user, id, file_id):
 @admin_portal_blueprint.route('/chatbots/<string:id>/qna/<int:file_id>/download', methods=['GET'])
 def download_chatbot_qna_file(id, file_id):
     try:
-        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+        db_id = parse_chatbot_id(id)
     except ValueError:
         return jsonify({"error": "Invalid chatbot identifier"}), 400
 
@@ -987,7 +661,7 @@ def download_chatbot_qna_file(id, file_id):
 @token_required
 def update_chatbot_status(current_user, id):
     try:
-        db_id = int(id[2:]) if id.startswith("CB") else int(id)
+        db_id = parse_chatbot_id(id)
     except ValueError:
         return jsonify({"error": "Invalid chatbot id"}), 400
     bot = Chatbot.query.get(db_id)
