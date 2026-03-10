@@ -1,3 +1,4 @@
+import re
 import uuid
 import json
 import os
@@ -26,6 +27,11 @@ import random
 config = Config()
 # Create a session
 session = db.session
+
+
+def _contains_except_keyword(text: str, keyword: str) -> bool:
+    """Check if keyword appears as a whole word (avoids false positives like 'SU' in 'support')."""
+    return bool(re.search(r"\b" + re.escape(keyword) + r"\b", text, re.IGNORECASE))
 
 chatbot_blueprint = Blueprint('chatbot', __name__)
 question_suggest_blueprint = Blueprint('question_suggest', __name__)
@@ -106,7 +112,7 @@ def chat(chatbot_id: int):
 
     ask_relevant_question = True
     for keyword in except_keywords:
-        if keyword.lower() in user_input.lower():
+        if _contains_except_keyword(user_input, keyword):
             answer = f"Thank you for your question. Unfortunately, I can only provide answers related to {full_name}. Please reach out to our Student Information Office at studentservice@buv.edu.vn for further assistance."
             response = {
                 "answer": answer,
@@ -163,7 +169,7 @@ def chat_stream(chatbot_id: int):
     def generate():
         ask_relevant_question = True
         for keyword in except_keywords:
-            if keyword in user_input:
+            if _contains_except_keyword(user_input, keyword):
                 answer = f"Thank you for your question. Unfortunately, I can only provide answers related to {full_name}. Please reach out to our Student Information Office at studentservice@buv.edu.vn for further assistance."
                 
                 # Stream the static response
