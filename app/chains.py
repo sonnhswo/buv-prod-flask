@@ -55,11 +55,11 @@ def create_relevant_questions_chain(retriever):
     chain = retriever | get_content_only 
     return chain
 
-def conversational_chain(conversational_rag_chain, relevant_questions_chain, query: str, session_id: str) -> dict:
+def conversational_chain(conversational_rag_chain, relevant_questions_chain, query: str, session_id: str, fallback_message: str) -> dict:
     print(f"{query=}")
     print(f"{session_id=}")
     response = conversational_rag_chain.invoke(
-        {"input": query},
+        {"input": query, "fallback_message": fallback_message},
         config={
             "configurable": {"session_id": session_id}
         }
@@ -70,14 +70,14 @@ def conversational_chain(conversational_rag_chain, relevant_questions_chain, que
     return output
 
 
-def conversational_chain_stream(conversational_rag_chain, relevant_questions_chain, query: str, session_id: str, uni_name: str):
+def conversational_chain_stream(conversational_rag_chain, relevant_questions_chain, query: str, session_id: str, uni_name: str, fallback_message: str):
     """Stream the conversational response"""
     from app.utils import add_prefix_to_answer
-    
-    
+
+
     # Get the full response first (LangChain streaming with structured output is complex)
     response = conversational_rag_chain.invoke(
-        {"input": query},
+        {"input": query, "fallback_message": fallback_message},
         config={
             "configurable": {"session_id": session_id}
         }

@@ -69,6 +69,11 @@ def chat(chatbot_id: int):
         except_keywords = []
         full_name = chatbot.name
 
+    if chatbot.division == 'student':
+        fallback_message = "You may reach out to Campus Central at campuscentral@buv.edu.vn and the team will gladly assist you."
+    else:
+        fallback_message = "You may reach out to Academic Quality Office at qa@buv.edu.vn and the team will gladly assist you."
+
     ask_relevant_question = True
     for keyword in except_keywords:
         if keyword.lower() in user_input.lower():
@@ -84,7 +89,7 @@ def chat(chatbot_id: int):
 
     if ask_relevant_question:
         print(f"Executing langchain for chatbot {full_name=}.")
-        response = generate_response(user_input, str(session_id), str(chatbot.id), full_name)
+        response = generate_response(user_input, str(session_id), str(chatbot.id), full_name, fallback_message)
 
     new_human_message = ChatMessage(message=user_input, is_user_message=True, session_id=session_id)
     new_ai_message = ChatMessage(message=response["answer"], is_user_message=False, session_id=session_id)
@@ -125,6 +130,11 @@ def chat_stream(chatbot_id: int):
         except_keywords = []
         full_name = chatbot.name
 
+    if chatbot.division == 'student':
+        fallback_message = "You may reach out to Campus Central at campuscentral@buv.edu.vn and the team will gladly assist you."
+    else:
+        fallback_message = "You may reach out to Academic Quality Office at qa@buv.edu.vn and the team will gladly assist you."
+
     def generate():
         ask_relevant_question = True
         for keyword in except_keywords:
@@ -154,7 +164,7 @@ def chat_stream(chatbot_id: int):
             full_answer = ""
 
             try:
-                for chunk in generate_response_stream(user_input, str(session_id), str(chatbot.id), full_name):
+                for chunk in generate_response_stream(user_input, str(session_id), str(chatbot.id), full_name, fallback_message):
                     if chunk['type'] == 'content':
                         full_answer += chunk['content']
                     yield f"data: {json.dumps(chunk)}\n\n"

@@ -523,7 +523,7 @@ class QnAIngestor:
                         {
                             "chatbot": filter_value,
                             "qna_filename": self.document_title,
-                            "document_title": row.get("Source") or self.document_title,
+                            "document_title": row.get("Source"),
                             "page_number": row.get("Page"),
                             "expected_answer": row.get("Expected answer"),
                         }
