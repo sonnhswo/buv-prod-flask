@@ -71,13 +71,15 @@ def chat(chatbot_id: int):
 
     if chatbot.division == 'student':
         fallback_message = "You may reach out to Campus Central at campuscentral@buv.edu.vn and the team will gladly assist you."
+        error_message = "For further assistance, please contact Campus Central via email at campuscentral@buv.edu.vn or by phone at 0936 376 136."
     else:
         fallback_message = "You may reach out to Academic Quality Office at qa@buv.edu.vn and the team will gladly assist you."
+        error_message = "For further assistance, please contact Academic Quality Office via email at qa@buv.edu.vn."
 
     ask_relevant_question = True
     for keyword in except_keywords:
         if keyword.lower() in user_input.lower():
-            answer = f"Thank you for your question. Unfortunately, I can only provide answers related to {full_name}. Please reach out to our Student Information Office at studentservice@buv.edu.vn for further assistance."
+            answer = f"Thank you for your question. Unfortunately, I can only provide answers related to {full_name}. {error_message}"
             response = {
                 "answer": answer,
                 "source": None,
@@ -89,7 +91,7 @@ def chat(chatbot_id: int):
 
     if ask_relevant_question:
         print(f"Executing langchain for chatbot {full_name=}.")
-        response = generate_response(user_input, str(session_id), str(chatbot.id), full_name, fallback_message)
+        response = generate_response(user_input, str(session_id), str(chatbot.id), full_name, fallback_message, error_message)
 
     new_human_message = ChatMessage(message=user_input, is_user_message=True, session_id=session_id)
     new_ai_message = ChatMessage(message=response["answer"], is_user_message=False, session_id=session_id)
@@ -132,15 +134,17 @@ def chat_stream(chatbot_id: int):
 
     if chatbot.division == 'student':
         fallback_message = "You may reach out to Campus Central at campuscentral@buv.edu.vn and the team will gladly assist you."
+        error_message = "For further assistance, please contact Campus Central via email at campuscentral@buv.edu.vn or by phone at 0936 376 136."
     else:
         fallback_message = "You may reach out to Academic Quality Office at qa@buv.edu.vn and the team will gladly assist you."
+        error_message = "For further assistance, please contact Academic Quality Office via email at qa@buv.edu.vn."
 
     def generate():
         ask_relevant_question = True
         for keyword in except_keywords:
-            if keyword in user_input:
-                answer = f"Thank you for your question. Unfortunately, I can only provide answers related to {full_name}. Please reach out to our Student Information Office at studentservice@buv.edu.vn for further assistance."
-                
+            if keyword.lower() in user_input.lower():
+                answer = f"Thank you for your question. Unfortunately, I can only provide answers related to {full_name}. {error_message}"
+
                 # Stream the static response
                 yield f"data: {json.dumps({'type': 'content', 'content': answer})}\n\n"
                 yield f"data: {json.dumps({'type': 'metadata', 'source': None, 'page_number': None})}\n\n"
@@ -164,7 +168,7 @@ def chat_stream(chatbot_id: int):
             full_answer = ""
 
             try:
-                for chunk in generate_response_stream(user_input, str(session_id), str(chatbot.id), full_name, fallback_message):
+                for chunk in generate_response_stream(user_input, str(session_id), str(chatbot.id), full_name, fallback_message, error_message):
                     if chunk['type'] == 'content':
                         full_answer += chunk['content']
                     yield f"data: {json.dumps(chunk)}\n\n"

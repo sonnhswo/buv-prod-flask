@@ -25,7 +25,7 @@ def clear_history(session_id: str):
     if session_id in store:
         del store[session_id]
 
-def generate_response(user_input: str, session_id: str, chatbot_id: str, chatbot_name: str, fallback_message: str) -> dict:
+def generate_response(user_input: str, session_id: str, chatbot_id: str, chatbot_name: str, fallback_message: str, error_message: str) -> dict:
     try:
         language_detection = language_detection_chain.invoke({"input": user_input})
         if language_detection.language != "English":
@@ -76,11 +76,11 @@ def generate_response(user_input: str, session_id: str, chatbot_id: str, chatbot
             "page_number": page_number,
             "relevant_questions": relevant_questions
         }
-    
+
     except (BadRequestError, ValueError) as e:
         print(e)
-        standard_message = "For further assistance, please contact our Student Information Office via email at studentservice@buv.edu.vn or by phone at 0936 376 136."
-        
+        standard_message = error_message
+
         return {
             "answer": add_prefix_to_answer(standard_message, chatbot_name),
             "source": None,
@@ -89,7 +89,7 @@ def generate_response(user_input: str, session_id: str, chatbot_id: str, chatbot
         }
     except Exception as e:
         print(e)
-        standard_message = "For further assistance, please contact our Student Information Office via email at studentservice@buv.edu.vn or by phone at 0936 376 136."
+        standard_message = error_message
 
         return {
             "answer": add_prefix_to_answer(standard_message, chatbot_name),
@@ -99,7 +99,7 @@ def generate_response(user_input: str, session_id: str, chatbot_id: str, chatbot
         }
 
 
-def generate_response_stream(user_input: str, session_id: str, chatbot_id: str, uni_name: str, fallback_message: str):
+def generate_response_stream(user_input: str, session_id: str, chatbot_id: str, uni_name: str, fallback_message: str, error_message: str):
     """Generator function for streaming responses"""
     try:
         language_detection = language_detection_chain.invoke({"input": user_input})
@@ -160,7 +160,7 @@ def generate_response_stream(user_input: str, session_id: str, chatbot_id: str, 
 
     except (BadRequestError, ValueError) as e:
         print(e)
-        standard_message = "For further assistance, please contact our Student Information Office via email at studentservice@buv.edu.vn or by phone at 0936 376 136."
+        standard_message = error_message
         yield {'type': 'content', 'content': add_prefix_to_answer(standard_message, uni_name)}
         yield {'type': 'metadata', 'source': None, 'page_number': None}
         yield {'type': 'questions', 'relevant_questions': []}
