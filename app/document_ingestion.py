@@ -310,6 +310,7 @@ class DocumentIngestor :
             gen_questions_prompt = \
             f"""
             You are a versatile question-generation expert:
+            - **Language**: The input may be in Vietnamese or English. Regardless of the input language, generate all questions (question1, question2, question3) in English only.
             - Treat the input as a source of knowledge, not as an object to be summarized.
             - Never refer to the input format in your questions (e.g., avoid "What does this table say" or "What is in this paragraph").
             - Never include the original source text in your output.
@@ -318,8 +319,8 @@ class DocumentIngestor :
 
             Depending on the input type, your task is as follows:
             - If the input is already a question, your task is as follows:
-                1. Preserve the original question exactly as 'question1'.
-                2. Generate two additional questions ('question2', 'question3') that probe deeper into the topic or related aspects.
+                1. Use the original question as 'question1', translated to English if it is in Vietnamese.
+                2. Generate two additional questions ('question2', 'question3') in English that probe deeper into the topic or related aspects.
 
             - If the input is a table, generate 3 questions that helps to find and understand the data:
                 1. A question about what informations the table contains, or its purpose.
