@@ -66,6 +66,15 @@ def conversational_chain(conversational_rag_chain, relevant_questions_chain, que
     )
     relevant_questions = relevant_questions_chain.invoke(str(response['context']))
     output = extract_formatted_answer(response['answer'])
+
+    answer_text = output['answer']
+    source = output.get('source')
+    if source is None and fallback_message not in answer_text:
+        lower_ans = answer_text.lower()
+        triggers = ["not provide information", "not mentioned", "do not mention", "does not mention", "not provide", "not specify", "no information", "do not provide", "does not provide"]
+        if any(phrase in lower_ans for phrase in triggers):
+            output['answer'] = f"It seems that this information is not mentioned in the documents. {fallback_message}"
+
     output['relevant_questions'] = relevant_questions
     return output
 
@@ -82,11 +91,20 @@ def conversational_chain_stream(conversational_rag_chain, relevant_questions_cha
             "configurable": {"session_id": session_id}
         }
     )
-    
+
     # Extract answer and metadata
     output = extract_formatted_answer(response['answer'])
+
+    answer_text = output['answer']
+    source = output.get('source')
+    if source is None and fallback_message not in answer_text:
+        lower_ans = answer_text.lower()
+        triggers = ["not provide information", "not mentioned", "do not mention", "does not mention", "not provide", "not specify", "no information", "do not provide", "does not provide"]
+        if any(phrase in lower_ans for phrase in triggers):
+            output['answer'] = f"It seems that this information is not mentioned in the documents. {fallback_message}"
+
     answer = add_prefix_to_answer(output['answer'], uni_name)
-    
+
     # Stream the answer word by word
     words = answer.split(' ')
     for i, word in enumerate(words):
