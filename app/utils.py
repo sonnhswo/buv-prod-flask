@@ -18,29 +18,36 @@ config = Config()
 #     return {"error": str(error)}
 
 
-language_detection_prompt_template = """
-Identify the language of the text below as either `Vietnamese` or `Other`.
+class LanguageDetectionOutput(BaseModel):
+    language: Literal["English", "Non_English"] = Field(
+        description="The detected language of the text. 'English' if the text is in English, 'Non_English' for any other languages."
+    )
 
-Respond with only one word.
+language_detection_prompt_template = """
+Identify whether the text below is in English or another language.
 
 <text>
 {input}
 </text>
-
-Language:"""
+"""
 
 language_detection_chain = (
     PromptTemplate.from_template(language_detection_prompt_template)
-    | azure_openai
-    | StrOutputParser()
+    | azure_openai.with_structured_output(LanguageDetectionOutput)
 )
 
-doc_options = ["BUV Frequently Asked Questions", "SU Frequently Asked Questions", "Student Handbook", "PSG Programme Handbook", "Outbound Mobility Handbook & FAQ", "IFP Frequently Asked Questions", "UoL Frequently Asked Questions", "AUB Frequently Asked Questions", "US Frequently Asked Questions"]
 class FormatedOutput(BaseModel):
-    answer: str = Field(description="The answer to the user question")
-    # source: Optional[Literal[*np.array(doc_options)]] = Field(description=f"Source document of the information retrieved, should be one of these options: {doc_options}") #type:ignore
-    source: Optional[Literal["BUV Frequently Asked Questions", "SU Frequently Asked Questions", "Student Handbook", "PSG Programme Handbook", "Outbound Mobility Handbook & FAQ", "IFP Frequently Asked Questions", "UoL Frequently Asked Questions", "AUB Frequently Asked Questions", "US Frequently Asked Questions"]] = Field(default=None, description=f"Source document of the information retrieved, should be one of these options: {doc_options}") #type:ignore
-    page_number: Optional[str] = Field(default=None, description="The page number in the document where the information was retrieved")
+    answer: str = Field(
+        description="The clean prose answer to the user question. DO NOT include titles, source names, or page numbers here."
+    )
+    source: Optional[str] = Field(
+        default=None, 
+        description="The EXACT File Name of the source document(s) (e.g., 'Assessment Approval Procedure Handbook - Sep 2024.pdf')"
+    )
+    page_number: Optional[str] = Field(
+        default=None, 
+        description="The page number(s) where the information was found. The page number MUST be selected from the specific context(s) used to write the answer. Do not include page number of irrelevant context."
+    )
 
 def stringify_formatted_answer(inputs: FormatedOutput) -> str:
     return f"""
@@ -89,6 +96,3 @@ def add_prefix_to_answer(answer, uni_name):
         return "**For US students:**\n\n" + answer
             
     return answer
-
-class RelevantQuestionsOutput(BaseModel):
-    questions: list[str] = Field(default=[], description="Questions after reformated to keep only the English part", min_length=3, max_length=3)

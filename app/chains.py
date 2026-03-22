@@ -12,7 +12,7 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_openai import AzureChatOpenAI
 
-from .utils import FormatedOutput, stringify_formatted_answer, extract_formatted_answer, RelevantQuestionsOutput
+from .utils import FormatedOutput, stringify_formatted_answer, extract_formatted_answer
 from .prompt_templates import contextualized_template, system_template, relevant_question_template
 
 def create_stuff_documents_chain(llm: AzureChatOpenAI, 
@@ -50,21 +50,74 @@ def create_conversational_rag_chain(retriever, get_session_history):
 
 def create_relevant_questions_chain(retriever):
     def get_content_only(doc_list):
-        return [doc.page_content for doc in doc_list]
-    chain = retriever | get_content_only | RunnablePassthrough(lambda x: {"questions": x}) | azure_openai.with_structured_output(RelevantQuestionsOutput)
+        print(f"RELEVANT QUESTIONS: {[doc.metadata.get('matched_question') for doc in doc_list]}")
+        return [doc.metadata.get("matched_question") for doc in doc_list]
+    chain = retriever | get_content_only 
     return chain
 
-def conversational_chain(conversational_rag_chain, relevant_questions_chain, query: str, session_id: str) -> dict:
+def conversational_chain(conversational_rag_chain, relevant_questions_chain, query: str, session_id: str, fallback_message: str) -> dict:
     print(f"{query=}")
     print(f"{session_id=}")
     response = conversational_rag_chain.invoke(
-        {"input": query},
+        {"input": query, "fallback_message": fallback_message},
         config={
             "configurable": {"session_id": session_id}
         }
     )
-    pprint.pprint(response)
     relevant_questions = relevant_questions_chain.invoke(str(response['context']))
     output = extract_formatted_answer(response['answer'])
-    output['relevant_questions'] = relevant_questions.questions
+
+    answer_text = output['answer']
+    source = output.get('source')
+    if source is None and fallback_message not in answer_text:
+        lower_ans = answer_text.lower()
+        triggers = ["not provide information", "not mentioned", "do not mention", "does not mention", "not provide", "not specify", "no information", "do not provide", "does not provide"]
+        if any(phrase in lower_ans for phrase in triggers):
+            output['answer'] = f"It seems that this information is not mentioned in the documents. {fallback_message}"
+
+    output['relevant_questions'] = relevant_questions
     return output
+
+
+def conversational_chain_stream(conversational_rag_chain, relevant_questions_chain, query: str, session_id: str, uni_name: str, fallback_message: str):
+    """Stream the conversational response"""
+    from app.utils import add_prefix_to_answer
+
+
+    # Get the full response first (LangChain streaming with structured output is complex)
+    response = conversational_rag_chain.invoke(
+        {"input": query, "fallback_message": fallback_message},
+        config={
+            "configurable": {"session_id": session_id}
+        }
+    )
+
+    # Extract answer and metadata
+    output = extract_formatted_answer(response['answer'])
+
+    answer_text = output['answer']
+    source = output.get('source')
+    if source is None and fallback_message not in answer_text:
+        lower_ans = answer_text.lower()
+        triggers = ["not provide information", "not mentioned", "do not mention", "does not mention", "not provide", "not specify", "no information", "do not provide", "does not provide"]
+        if any(phrase in lower_ans for phrase in triggers):
+            output['answer'] = f"It seems that this information is not mentioned in the documents. {fallback_message}"
+
+    answer = add_prefix_to_answer(output['answer'], uni_name)
+
+    # Stream the answer word by word
+    words = answer.split(' ')
+    for i, word in enumerate(words):
+        if i == 0:
+            yield {'type': 'content', 'content': word}
+        else:
+            yield {'type': 'content', 'content': ' ' + word}
+    
+    # Send metadata
+    yield {'type': 'metadata', 'source': output.get('source'), 'page_number': output.get('page_number')}
+    
+    # Get and send relevant questions
+    relevant_questions = relevant_questions_chain.invoke(str(response['context']))
+    yield {'type': 'questions', 'relevant_questions': relevant_questions}
+    
+    yield {'type': 'done'}

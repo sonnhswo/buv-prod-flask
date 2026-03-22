@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  azure-function:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "7071:80"
+    environment:
+      - AzureWebJobsStorage=UseDevelopmentStorage=true
+    volumes:
+      - ./src:/home/site/wwwroot/src
+      - ./host.json:/home/site/wwwroot/host.json
+      - ./local.settings.json:/home/site/wwwroot/local.settings.json
+    command: /azure-functions-host/Microsoft.Azure.WebJobs.Script.WebHost

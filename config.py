@@ -17,7 +17,63 @@ class Config:
     print(f"{AZURE_EMBEDDING_MODEL_DEPLOYMENT_NAME = }")
     AZURE_EMBEDDING_MODEL_OPENAI_VERSION = os.getenv('AZURE_EMBEDDING_MODEL_OPENAI_VERSION')
     print(f"{AZURE_EMBEDDING_MODEL_OPENAI_VERSION = }")
+
+    DETERMINISTIC_TMP = int(os.getenv("DETERMINISTIC_TMP"))
+    print(f"{DETERMINISTIC_TMP = }")
+    CREATIVE_TMP = int(os.getenv("CREATIVE_TMP"))
+    print(f"{CREATIVE_TMP = }")
     
+    AZURE_INGEST_MODEL_DEPLOYMENT_NAME = os.getenv('AZURE_INGEST_MODEL_DEPLOYMENT_NAME')
+    print(f"{AZURE_INGEST_MODEL_DEPLOYMENT_NAME = }")
+    AZURE_INGEST_MODEL_DEPLOYMENT_VERSION = os.getenv('AZURE_INGEST_MODEL_DEPLOYMENT_VERSION')
+    print(f"{AZURE_INGEST_MODEL_DEPLOYMENT_VERSION = }")
+
+    DOC_INT_ENDPOINT = os.getenv("DOC_INT_ENDPOINT")
+    print(f"{DOC_INT_ENDPOINT = }")
+    DOC_INT_KEY = os.getenv("DOC_INT_KEY")
+    print(f"{DOC_INT_KEY = }")
+
+    AI_SEARCH_ENDPOINT = os.getenv("AI_SEARCH_ENDPOINT")
+    print(f"{AI_SEARCH_ENDPOINT = }")
+    INDEX_NAME = os.getenv("INDEX_NAME")
+    print(f"{INDEX_NAME = }")
+    PHASE1_INDEX_NAME = os.getenv("PHASE1_INDEX_NAME")
+    print(f"{PHASE1_INDEX_NAME = }")
+    QNA_INDEX_NAME = os.getenv("QNA_INDEX_NAME")
+    print(f"{QNA_INDEX_NAME = }")
+    AI_SEARCH_KEY = os.getenv("AI_SEARCH_KEY")
+    print(f"{AI_SEARCH_KEY = }")
+    VECTOR_SEARCH_PROFILE = os.getenv("VECTOR_SEARCH_PROFILE")
+    print(f"{VECTOR_SEARCH_PROFILE = }")
+
+    CHUNK_SIZE = int(os.getenv("CHUNK_SIZE"))
+    print(f"{CHUNK_SIZE = }")
+    CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP"))
+    print(f"{CHUNK_OVERLAP = }")
+
+    DOC_TOP_K = int(os.getenv("DOC_TOP_K"))
+    print(f"{DOC_TOP_K = }")
+    QUESTION_TOP_K = int(os.getenv("QUESTION_TOP_K"))
+    print(f"{QUESTION_TOP_K = }")
+    FETCH_K = int(os.getenv("FETCH_K"))
+    print(f"{FETCH_K = }")
+    LAMBDA_MULT = float(os.getenv("LAMBDA_MULT"))
+    print(f"{LAMBDA_MULT = }")
+    QNA_SIMILARITY_THRESHOLD = float(os.getenv("QNA_SIMILARITY_THRESHOLD"))
+    print(f"{QNA_SIMILARITY_THRESHOLD = }")
+
+    STORAGE_URL = os.getenv("STORAGE_URL")
+    print(f"{STORAGE_URL = }")
+    CONTAINER_NAME = os.getenv("CONTAINER_NAME")
+    print(f"{CONTAINER_NAME = }")
+    STORAGE_KEY = os.getenv("STORAGE_KEY")
+    print(f"{STORAGE_KEY = }")
+
+    DOCX_TO_PDF_API_URL = os.getenv("DOCX_TO_PDF_API_URL")
+    print(f"{DOCX_TO_PDF_API_URL = }")
+    TIMEOUT = int(os.getenv("TIMEOUT"))
+    print(f"{TIMEOUT = }")
+
     BLOB_CONN_STRING = os.getenv('BLOB_CONN_STRING')
     BLOB_CONTAINER = os.getenv('BLOB_CONTAINER')
     
@@ -39,6 +95,7 @@ class Config:
     PGDATABASE5 = os.getenv('PGDATABASE5') # Raw Data database
     print(f"{PGDATABASE5 = }")
     PGDATABASE6 = os.getenv('PGDATABASE6') # Raw Data database
+    print(f"{PGDATABASE6 = }")
     DEMO_SU = os.getenv('DEMO_SU') # SU database
     print(f"{DEMO_SU = }")
     PROD_UOL = os.getenv('DEMO_UOL') # UOL database
@@ -54,6 +111,7 @@ class Config:
     print(f"{BUS_SCHEDULE_FILE = }")
     STARTING_TIME_FILE = os.getenv('STARTING_TIME_FILE') # Handle Bus Schedule cases
     print(f"{STARTING_TIME_FILE = }")
+    JWT_SECRET = os.getenv('JWT_SECRET')
 
     SQLALCHEMY_DATABASE_URI = f'postgresql://{PG_VECTOR_USER}:{PG_VECTOR_PASSWORD}@{PG_VECTOR_HOST}/{PGDATABASE6}'
     # configs for each awarding bodies
@@ -86,3 +144,9 @@ class Config:
     THUMB_UP_VALUE = 1
     THUMB_DOWN_VALUE = -1
     NO_THUMB_VALUE = 0
+    
+    # CORS Configuration
+    CORS_ORIGINS = os.getenv('CORS_ORIGINS', '*').split(',')
+    CORS_ALLOW_HEADERS = ['Content-Type', 'Authorization', 'X-Requested-With']
+    CORS_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH']
+    CORS_SUPPORTS_CREDENTIALS = True
