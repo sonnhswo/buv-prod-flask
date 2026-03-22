@@ -1,7 +1,7 @@
 azure-functions==1.23.0
 azure-storage-blob==12.23.1
 azure-ai-documentintelligence==1.0.2
-azure-core==1.30.2
+azure-core==1.32.0
 azure-identity==1.16.0
 azure-search-documents==11.6.0
 azure-storage-queue==12.11.0

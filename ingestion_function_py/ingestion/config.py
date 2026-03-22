@@ -33,6 +33,7 @@ class Settings:
     chunk_size: int
     chunk_overlap: int
     ingest_max_workers: int
+    ingest_upload_batch_size: int
     phase1_chatbots: set[str]
 
 
@@ -81,5 +82,6 @@ def load_settings() -> Settings:
         chunk_size=int(os.getenv("CHUNK_SIZE", "1000")),
         chunk_overlap=int(os.getenv("CHUNK_OVERLAP", "200")),
         ingest_max_workers=int(os.getenv("INGEST_MAX_WORKERS", "3")),
+        ingest_upload_batch_size=int(os.getenv("INGEST_UPLOAD_BATCH_SIZE", "30")),
         phase1_chatbots=phase1_chatbots,
     )

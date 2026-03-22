@@ -4,6 +4,7 @@ import logging
 import math
 import re
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from time import perf_counter
 
 import pandas as pd
@@ -254,9 +255,8 @@ class DocumentIngestor:
 
     def enhance_extraction_result(self, result: AnalyzeResult) -> str:
         lcontent = result.content.split(self.page_break)
-        lenhanced = []
 
-        for content in lcontent:
+        def _enhance_one(content: str) -> str:
             enhance_extraction_prompt = f"""
             **Role**:
             You are an expert text reformater. Given a text representing a document, extract with the *highest fidelity*
@@ -313,7 +313,10 @@ class DocumentIngestor:
             {content}
             """
             resp = self.runtime.llm_fixer.invoke(enhance_extraction_prompt)
-            lenhanced.append(resp.content)
+            return resp.content
+
+        with ThreadPoolExecutor(max_workers=self.settings.ingest_max_workers) as executor:
+            lenhanced = list(executor.map(_enhance_one, lcontent))
 
         return "\n".join(lenhanced)
 
@@ -416,6 +419,87 @@ class DocumentIngestor:
 
         return enhanced
 
+    def enrich_and_upload_chunks(self, chunks: list[Document]) -> int:
+        """Enrich chunks in parallel and upload to AI Search in batches as results arrive."""
+        filter_value = self._filter_value()
+        structured_llm = self.runtime.llm_generator.with_structured_output(ChunkQuestions)
+        total_chunks = len(chunks)
+        upload_batch_size = self.settings.ingest_upload_batch_size
+        total_docs = 0
+        upload_batch: list[Document] = []
+
+        def _enrich_one(i: int, chunk: Document) -> list[Document]:
+            gen_questions_prompt = f"""
+            You are a versatile question-generation expert:
+            - Treat the input as a source of knowledge, not as an object to be summarized.
+            - Never refer to the input format in your questions (e.g., avoid "What does this table say" or "What is in this paragraph").
+            - Never include the original source text in your output.
+            - Focus on the *subject matter*, not the *document structure*.
+            - Generate questions that stand alone and make sense to a user who hasn't seen the source chunk.
+
+            Depending on the input type, your task is as follows:
+            - If the input is already a question, your task is as follows:
+                1. Preserve the original question exactly as 'question1'.
+                2. Generate two additional questions ('question2', 'question3') that probe deeper into the topic or related aspects.
+
+            - If the input is a table, generate 3 questions that helps to find and understand the data:
+                1. A question about what informations the table contains, or its purpose.
+                2. A general question that could be answered using one or more rows of the table.
+                3. A question addressing the relationships between columns.
+
+            - If the input is a paragraph, generate 3 common questions that people frequenly ask about the given information:
+                1. A general question covering the main idea or topic.
+                2. A question probing deeper into specific details or implications.
+                3. A question addressing potential applications, consequences, or related aspects.
+
+            Please return the output in a Python dictionary format with the following keys: 'question1', 'question2', 'question3'.
+
+            Here is the input:
+            {chunk.page_content}
+            """
+            try:
+                output_questions = structured_llm.invoke(gen_questions_prompt)
+                logger.info("[Q&C PAIR] processed chunk %s/%s", i, total_chunks)
+                return [
+                    Document(
+                        page_content=q_text,
+                        metadata={
+                            "document_title": self.document_title,
+                            "chatbot": filter_value,
+                            "metadata": json.dumps(
+                                {
+                                    "chatbot": filter_value,
+                                    "document_title": self.document_title,
+                                    "page_number": str(chunk.metadata.get("page_number")),
+                                    "document_chunk": chunk.page_content,
+                                }
+                            ),
+                        },
+                    )
+                    for q_text in [output_questions.question1, output_questions.question2, output_questions.question3]
+                ]
+            except Exception as exc:
+                logger.error("[Q&C PAIR] chunk %s failed: %s", i, exc)
+                return []
+
+        with ThreadPoolExecutor(max_workers=self.settings.ingest_max_workers) as executor:
+            futures = {
+                executor.submit(_enrich_one, i, chunk): i
+                for i, chunk in enumerate(chunks, start=1)
+            }
+            for future in as_completed(futures):
+                docs = future.result()
+                upload_batch.extend(docs)
+                total_docs += len(docs)
+                if len(upload_batch) >= upload_batch_size:
+                    self.upload_chunk_to_ai_search(upload_batch)
+                    upload_batch = []
+
+        if upload_batch:
+            self.upload_chunk_to_ai_search(upload_batch)
+
+        return total_docs
+
     def upload_chunk_to_ai_search(self, docs: list[Document]) -> None:
         if not docs:
             return
@@ -465,13 +549,9 @@ class DocumentIngestor:
         chunks = self.chunk_markdown(enhanced)
         _log_step_done("chunk_markdown", step_started, chunk_count=len(chunks))
 
-        step_started = _log_step_start("enrich_chunks", chunk_count=len(chunks), workers=self.settings.ingest_max_workers)
-        qc_pairs = self.enrich_chunks(chunks)
-        _log_step_done("enrich_chunks", step_started, generated_docs=len(qc_pairs))
-
-        step_started = _log_step_start("upload_to_ai_search", doc_count=len(qc_pairs))
-        self.upload_chunk_to_ai_search(qc_pairs)
-        _log_step_done("upload_to_ai_search", step_started)
+        step_started = _log_step_start("enrich_and_upload_chunks", chunk_count=len(chunks), workers=self.settings.ingest_max_workers)
+        total_docs = self.enrich_and_upload_chunks(chunks)
+        _log_step_done("enrich_and_upload_chunks", step_started, generated_docs=total_docs)
 
         _log_step_done("document_ingestion", ingest_started)
 
