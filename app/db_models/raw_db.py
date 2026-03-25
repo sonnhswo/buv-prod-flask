@@ -106,6 +106,7 @@ class ChatMessage(db.Model):
     is_user_message = Column(Boolean, nullable=False)
     session_id = Column(Integer, ForeignKey('chat_session.id'), nullable=False)
     source = Column(JSONB, nullable=True)
+    reply_to_message_id = Column(Integer, ForeignKey('chat_message.id'), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), default=func.now(), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), default=func.now(), onupdate=func.now(), nullable=True)
 
