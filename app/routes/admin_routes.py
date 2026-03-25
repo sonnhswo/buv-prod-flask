@@ -710,36 +710,24 @@ def export_logs(current_user):
     query = query.order_by(ChatSession.id, ChatMessage.created_at)
     messages = query.all()
 
-    rows = []
-    pending = None
+    user_messages = []
+    bot_replies = {}
 
     for msg, sess, bot in messages:
-        if pending and pending['session_id'] != sess.id:
-            rows.append({
-                "Question": pending['msg'].message, "Answer": "", "Thumb up/thumb down": 0,
-                "Chatbot name": pending['bot_name'], "Timestamp": (pending['msg'].created_at - timedelta(minutes=tz_offset)).strftime("%H:%M:%S %d-%m-%Y")
-            })
-            pending = None
-
         if msg.is_user_message:
-            if pending:
-                rows.append({
-                    "Question": pending['msg'].message, "Answer": "", "Thumb up/thumb down": 0,
-                    "Chatbot name": pending['bot_name'], "Timestamp": (pending['msg'].created_at - timedelta(minutes=tz_offset)).strftime("%H:%M:%S %d-%m-%Y")
-                })
-            pending = {'msg': msg, 'session_id': sess.id, 'bot_name': bot.name}
-        else:
-            if pending:
-                rows.append({
-                    "Question": pending['msg'].message, "Answer": msg.message, "Thumb up/thumb down": msg.like or 0,
-                    "Chatbot name": pending['bot_name'], "Timestamp": (pending['msg'].created_at - timedelta(minutes=tz_offset)).strftime("%H:%M:%S %d-%m-%Y")
-                })
-                pending = None
+            user_messages.append((msg, bot.name))
+        elif msg.reply_to_message_id:
+            bot_replies[msg.reply_to_message_id] = msg
 
-    if pending:
+    rows = []
+    for u_msg, bot_name in user_messages:
+        reply = bot_replies.get(u_msg.id)
         rows.append({
-            "Question": pending['msg'].message, "Answer": "", "Thumb up/thumb down": 0,
-            "Chatbot name": pending['bot_name'], "Timestamp": (pending['msg'].created_at - timedelta(minutes=tz_offset)).strftime("%H:%M:%S %d-%m-%Y")
+            "Question": u_msg.message,
+            "Answer": reply.message if reply else "",
+            "Thumb up/thumb down": reply.like if reply and reply.like else 0,
+            "Chatbot name": bot_name,
+            "Timestamp": (u_msg.created_at - timedelta(minutes=tz_offset)).strftime("%H:%M:%S %d-%m-%Y")
         })
 
     df = pd.DataFrame(rows)
