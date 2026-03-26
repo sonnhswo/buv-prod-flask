@@ -94,8 +94,9 @@ def chat(chatbot_id: int):
         response = generate_response(user_input, str(session_id), str(chatbot.id), full_name, fallback_message, error_message)
 
     new_human_message = ChatMessage(message=user_input, is_user_message=True, session_id=session_id)
-    new_ai_message = ChatMessage(message=response["answer"], is_user_message=False, session_id=session_id)
     session.add(new_human_message)
+    session.flush()
+    new_ai_message = ChatMessage(message=response["answer"], is_user_message=False, session_id=session_id, reply_to_message_id=new_human_message.id)
     session.add(new_ai_message)
     session.commit()
     response["ai_message_id"] = new_ai_message.id
@@ -150,14 +151,15 @@ def chat_stream(chatbot_id: int):
                 yield f"data: {json.dumps({'type': 'metadata', 'source': None, 'page_number': None})}\n\n"
                 yield f"data: {json.dumps({'type': 'questions', 'relevant_questions': []})}\n\n"
                 yield f"data: {json.dumps({'type': 'done'})}\n\n"
-                
+
                 # Save to database
                 new_human_message = ChatMessage(message=user_input, is_user_message=True, session_id=session_id)
-                new_ai_message = ChatMessage(message=answer, is_user_message=False, session_id=session_id)
                 session.add(new_human_message)
+                session.flush()
+                new_ai_message = ChatMessage(message=answer, is_user_message=False, session_id=session_id, reply_to_message_id=new_human_message.id)
                 session.add(new_ai_message)
                 session.commit()
-                
+
                 yield f"data: {json.dumps({'type': 'message_id', 'ai_message_id': new_ai_message.id})}\n\n"
                 
                 ask_relevant_question = False
@@ -172,14 +174,15 @@ def chat_stream(chatbot_id: int):
                     if chunk['type'] == 'content':
                         full_answer += chunk['content']
                     yield f"data: {json.dumps(chunk)}\n\n"
-                
+
                 # Save to database after streaming completes
                 new_human_message = ChatMessage(message=user_input, is_user_message=True, session_id=session_id)
-                new_ai_message = ChatMessage(message=full_answer, is_user_message=False, session_id=session_id)
                 session.add(new_human_message)
+                session.flush()
+                new_ai_message = ChatMessage(message=full_answer, is_user_message=False, session_id=session_id, reply_to_message_id=new_human_message.id)
                 session.add(new_ai_message)
                 session.commit()
-                
+
                 # Send message ID
                 yield f"data: {json.dumps({'type': 'message_id', 'ai_message_id': new_ai_message.id})}\n\n"
                 
