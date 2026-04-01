@@ -3,9 +3,30 @@ from flask import Blueprint, request, jsonify, redirect
 from app.storage import get_sas_url
 from app.db_models.raw_db import Chatbot, Document
 from app.azure_clients.kb_clients import get_ai_search
+from app.utils import normalize_starter_questions_chain
 import random
 
 user_portal_blueprint = Blueprint('user_portal', __name__)
+
+
+def _format_numbered_questions(questions: list[str]) -> str:
+    return "\n".join(f"{i + 1}. {q}" for i, q in enumerate(questions))
+
+
+def _sample_then_english_starters(pool: list[str], k: int) -> list[str]:
+    """Random sample k from pool, then ensure each line is English (translate if needed)."""
+    if not pool:
+        return []
+    sampled = random.sample(pool, min(k, len(pool)))
+    try:
+        out = normalize_starter_questions_chain.invoke(
+            {"questions": _format_numbered_questions(sampled)}
+        )
+        if len(out.questions) == len(sampled):
+            return out.questions
+    except Exception as e:
+        print(f"normalize_starter_questions failed, returning raw sample: {e}")
+    return sampled
 
 
 @user_portal_blueprint.route('/chatbots/<string:division>', methods=['GET'])
@@ -99,7 +120,7 @@ def get_random_starter_questions(chatbot_id):
             top=50
         )
         pool = list({doc["content"] for doc in results if doc.get("content")})
-        questions = random.sample(pool, min(k, len(pool)))
+        questions = _sample_then_english_starters(pool, k)
         return jsonify({"relevant_questions": questions}), 200
     except Exception as e:
         print(f"Error fetching suggested questions for chatbot {chatbot_id}: {e}")

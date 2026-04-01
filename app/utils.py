@@ -36,6 +36,33 @@ language_detection_chain = (
     | azure_openai.with_structured_output(LanguageDetectionOutput)
 )
 
+
+class StarterQuestionsEnglishOutput(BaseModel):
+    questions: list[str] = Field(
+        description="Same number of items and order as the input list; each string must be in English."
+    )
+
+
+normalize_starter_questions_prompt_template = """
+You normalize suggested starter questions for a university chatbot.
+
+You will receive a numbered list of questions. For each question, in order:
+- If it is already in English, return it unchanged (only fix obvious typos if needed).
+- If it is not in English, translate it into clear, natural English. Preserve all meaning, nuance, and information density. Keep proper names, document titles, policy terms, numbers, and dates exactly as given.
+
+The output must contain exactly the same number of questions as the input, in the same order.
+
+<questions>
+{questions}
+</questions>
+"""
+
+normalize_starter_questions_chain = (
+    PromptTemplate.from_template(normalize_starter_questions_prompt_template)
+    | azure_openai.with_structured_output(StarterQuestionsEnglishOutput)
+)
+
+
 class FormatedOutput(BaseModel):
     answer: str = Field(
         description="The clean prose answer to the user question. DO NOT include titles, source names, or page numbers here."
